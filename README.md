@@ -14,6 +14,7 @@ Autocaliweb is a web app that offers a clean and intuitive interface for browsin
 2. [Features](#features)
 3. [Installation](#installation)
    - [Installation via Docker (recommended)](#installation-via-docker-recommended)
+   - [Manual-Installation - without Docker](#manual-installation-without-docker)
    - [After Installation](#after-installation)
    - [Deploy Requirements](#deploy-requirements)
 4. [Troubleshooting](#troubleshooting)
@@ -109,6 +110,8 @@ services:
     stop_signal: SIGINT
     stop_grace_period: 15s
 ```
+### Manual installation without Docker  
+For manual installation without docker see [Manual Installation](https://github.com/gelbphoenix/autocaliweb/wiki/Manual-Installation).  
 
 ## After Installation
 

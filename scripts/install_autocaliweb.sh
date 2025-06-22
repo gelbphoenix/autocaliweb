@@ -282,17 +282,6 @@ EOF
     print_status "Configuration files updated"
 }
 
-# Retrieve main.js before Commit 1b3c75c  
-print_status "Retrieving main.js file..."  
-retrieve_old_main_js() {  
-  if curl https://raw.githubusercontent.com/gelbphoenix/autocaliweb/dfd3a361af23bb5e7f1613f88cf3b19e0aee7c27/cps/static/js/main.js -o /app/autocaliweb/cps/static/js/main.js; then  
-    print_status "main.js file retrieved successfully."  
-  else  
-    print_error "Failed to retrieve main.js file."  
-    exit 1 # Exit if the file retrieval fails  
-  fi  
-}
-
 # Set permissions
 set_permissions() {
     print_status "Setting permissions..."
@@ -337,7 +326,6 @@ main() {
     install_external_tools
     setup_configuration
     initialize_databases
-	retrieve_old_main_js
     set_permissions
     create_startup_script
     create_systemd_service

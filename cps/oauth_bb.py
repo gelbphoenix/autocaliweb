@@ -393,15 +393,16 @@ if ub.oauth_support:
         generic_user_email = str(generic_info[email_mapper])
         generic_user_name = str(generic_info[username_mapper])
 
+        # First, try to find user by username only
         user = (
             ub.session.query(ub.User)
-            .filter(and_(func.lower(ub.User.name) == generic_user_name,
-                        func.lower(ub.User.email) == generic_user_email))
+            .filter(func.lower(ub.User.name) == generic_user_name.lower())
         ).first()
 
         log.debug("Checking for user: %s", generic_user_name)
 
         if user is None:
+            # Create new user if username doesn't exist
             user = ub.User()
             user.name = generic_user_name
             user.email = generic_user_email
@@ -412,7 +413,21 @@ if ub.oauth_support:
             if generic_info.get('admin'):
                 user.sidebar_view |= constants.SIDEBAR_DOWNLOAD | constants.SIDEBAR_LIST
             ub.session.add(user)
+            log.info("Created new user: %s with email: %s", generic_user_name, generic_user_email)
+        else:
+            # User exists - update email if it's different
+            if user.email.lower() != generic_user_email.lower():
+                # Log the email change for security audit
+                log.info("Updating email for user %s from %s to %s", user.name, user.email, generic_user_email)
+                user.email = generic_user_email
+
+        try:
             ub.session.commit()
+        except Exception as e:
+            log.error("Failed to save user changes: %s", e)
+            ub.session.rollback()
+            flash(_("Failed to log in with Generic OAuth."), category="error")
+            return redirect(url_for('web.login'))
 
         result = oauth_update_token(str(oauthblueprints[2]['id']), token, user.id)
 

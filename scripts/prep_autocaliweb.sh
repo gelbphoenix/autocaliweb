@@ -18,24 +18,23 @@ REAL_GID=$(id -g "$REAL_USER")
 
 echo "Creating directories for user: $REAL_USER ($REAL_UID:$REAL_GID)"
   
-# Create main directories & Set ownership to the real user
-install -d -o "$REAL_UID" -g "$REAL_GID" /app/autocaliweb
-install -d -o "$REAL_UID" -g "$REAL_GID" /config
-install -d -o "$REAL_UID" -g "$REAL_GID" /calibre-library
-install -d -o "$REAL_UID" -g "$REAL_GID" /acw-book-ingest
+# Create main directories
+mkdir -p /app/autocaliweb
+mkdir -p /config
+mkdir -p /calibre-library
+mkdir -p /acw-book-ingest
 
 # Create config subdirectories (from acw-init service requirements)
-install -d -o "$REAL_UID" -g "$REAL_GID" /config/processed_books/converted
-install -d -o "$REAL_UID" -g "$REAL_GID" /config/processed_books/imported
-install -d -o "$REAL_UID" -g "$REAL_GID" /config/processed_books/failed
-install -d -o "$REAL_UID" -g "$REAL_GID" /config/processed_books/fixed_originals
-install -d -o "$REAL_UID" -g "$REAL_GID" /config/log_archive
-install -d -o "$REAL_UID" -g "$REAL_GID" /config/.acw_conversion_tmp
-
-install -d -o "$REAL_UID" -g "$REAL_GID" /config/.config/calibre/plugins
-
-install -d -o abc -g abc /app/autocaliweb/metadata_change_logs
-install -d -o abc -g abc /app/autocaliweb/metadata_temp
+mkdir -p /config/processed_books/{converted,imported,failed,fixed_originals}
+mkdir -p /config/log_archive
+mkdir -p /config/.acw_conversion_tmp
+mkdir -p /config/.config/calibre/plugins
+  
+# Set ownership to the real user
+chown -R "$REAL_UID:$REAL_GID" /app/autocaliweb
+chown -R "$REAL_UID:$REAL_GID" /config
+chown -R "$REAL_UID:$REAL_GID" /calibre-library
+chown -R "$REAL_UID:$REAL_GID" /acw-book-ingest
 
 # Create symbolic link for calibre plugins
 ln -sf /config/.config/calibre/plugins /config/calibre_plugins

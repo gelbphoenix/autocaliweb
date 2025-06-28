@@ -63,6 +63,7 @@ install_system_deps() {
     sudo apt-get update
     sudo apt-get install -y --no-install-recommends \
         python3-dev python3-pip python3-venv \
+        build-essential libldap2-dev libssl-dev libsasl2-dev \
         imagemagick ghostscript \
         libmagic1 libxi6 libxslt1.1 \
         libxtst6 libxrandr2 libxkbfile1 \
@@ -107,14 +108,24 @@ setup_autocaliweb() {
     fi
     
     # Create virtual environment
+    echo "Setting up Autocaliweb Python environment..."  
     python3 -m venv venv
     source venv/bin/activate
     
     # Upgrade pip and install dependencies
+    echo "Installing core Python requirements..."
     pip install -U pip wheel
-    pip install -r requirements.txt -r optional-requirements.txt
+    pip install -r requirements.txt
     
-    print_status "Python dependencies installed successfully"
+    read -p "Do you want to install optional dependencies? (y/n): " install_optional  
+    if [[ "$install_optional" == "y" || "$install_optional" == "Y" ]]; then  
+        echo "Installing optional Python dependencies..."  
+        pip install -r optional-requirements.txt            
+    fi  
+  
+    echo "Optional dependencies setup complete."  
+
+    print_status "Autocaliweb installed successfully"
 }
 
 # Separate function for Calibre installation

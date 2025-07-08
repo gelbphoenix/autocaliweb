@@ -406,12 +406,14 @@ if ub.oauth_support:
             user = ub.User()
             user.name = generic_user_name
             user.email = generic_user_email
+            
             user.role = constants.ROLE_USER | constants.ROLE_DOWNLOAD | constants.ROLE_UPLOAD | constants.ROLE_VIEWER
-            if generic_info.get('admin'):
+            user.sidebar_view = constants.SIDEBAR_ARCHIVED | constants.SIDEBAR_LANGUAGE | constants.SIDEBAR_SERIES | constants.SIDEBAR_CATEGORY | constants.SIDEBAR_HOT | constants.SIDEBAR_RANDOM | constants.SIDEBAR_AUTHOR | constants.SIDEBAR_BEST_RATED | constants.SIDEBAR_RECENT | constants.SIDEBAR_SORTED | constants.SIDEBAR_PUBLISHER
+
+            if generic_info.get('admin') or 'admin' in generic_info.get('groups', []):
                 user.role |= constants.ROLE_ADMIN | constants.ROLE_DELETE_BOOKS | constants.ROLE_EDIT | constants.ROLE_PASSWD | constants.ROLE_EDIT_SHELFS
-            user.sidebar_view = constants.SIDEBAR_ARCHIVED | constants.SIDEBAR_LANGUAGE | constants.SIDEBAR_SERIES | constants.SIDEBAR_CATEGORY | constants.SIDEBAR_HOT | constants.SIDEBAR_RANDOM | constants.SIDEBAR_AUTHOR | constants.SIDEBAR_BEST_RATED | constants.SIDEBAR_RECENT | constants.SIDEBAR_SORTED | constants.SIDEBAR_ARCHIVED | constants.SIDEBAR_PUBLISHER
-            if generic_info.get('admin'):
                 user.sidebar_view |= constants.SIDEBAR_DOWNLOAD | constants.SIDEBAR_LIST
+
             ub.session.add(user)
             log.info("Created new user: %s with email: %s", generic_user_name, generic_user_email)
         else:

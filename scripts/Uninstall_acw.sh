@@ -69,25 +69,33 @@ echo "  • Book ingest folder: /acw-book-ingest"
 echo "  • User 'abc' and group 'abc'"
 echo
 
-read -p "Do you want to delete ALL data files? This cannot be undone! (y/N): " -r
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    print_status "Removing all Autocaliweb data..."
-
-    # Remove application and data directories
-    sudo rm -rf /app/autocaliweb
-    sudo rm -rf /config
-    sudo rm -rf /calibre-library
-    sudo rm -rf /acw-book-ingest
-
-    # Remove any remaining files in /app if it's empty
-    if [ -d "/app" ] && [ -z "$(ls -A /app)" ]; then
-        sudo rmdir /app
-    fi
-
-    print_status "All data files removed"
-else
-    print_warning "Data files preserved. You can manually remove them later if needed:"
-    echo "  sudo rm -rf /app/autocaliweb /config /calibre-library /acw-book-ingest"
+read -p "Do you want to delete ALL data files? This cannot be undone! (y/N): " -r  
+if [[ $REPLY =~ ^[Yy]$ ]]; then  
+    print_status "Removing all Autocaliweb data..."  
+      
+    # Ask specifically about calibre-library  
+    read -p "Do you want to delete calibre-library too? This cannot be undone! (y/N): " -r calibre_reply  
+    if [[ $calibre_reply =~ ^[Yy]$ ]]; then  
+        sudo rm -rf /calibre-library  
+        print_status "Calibre library removed"  
+    else  
+        print_warning "Calibre library preserved at /calibre-library"  
+    fi  
+      
+    # Remove application and data directories  
+    sudo rm -rf /app/autocaliweb  
+    sudo rm -rf /config  
+    sudo rm -rf /acw-book-ingest  
+  
+    # Remove any remaining files in /app if it's empty  
+    if [ -d "/app" ] && [ -z "$(ls -A /app)" ]; then  
+        sudo rmdir /app  
+    fi  
+  
+    print_status "Application data files removed"  
+else  
+    print_warning "Data files preserved. You can manually remove them later if needed:"  
+    echo "  sudo rm -rf /app/autocaliweb /config /calibre-library /acw-book-ingest"  
 fi
 
 # Ask about user/group removal

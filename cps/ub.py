@@ -259,7 +259,7 @@ class User(UserBase, Base):
     kobo_only_shelves_sync = Column(Integer, default=0)
     kobo_plus = Column(Integer, default=0)
     kobo_overdrive = Column(Integer, default=0)
-    hardcover_token = Column(String, unique=True, default="")
+    hardcover_token = Column(String, default="")
 
 if oauth_support:
     class OAuth(OAuthConsumerMixin, Base):

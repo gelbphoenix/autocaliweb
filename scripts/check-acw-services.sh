@@ -9,7 +9,10 @@ echo "====== Autocaliweb -- Status of Monitoring Services ======"
 echo ""
 
 
-if s6-rc -a list | grep -q 'acw-ingest-service'; then
+if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet acw-ingest-service; then
+    echo -e "- acw-ingest-service ${GREEN}is running${NC} (systemd)"
+    is=true
+elif s6-rc -a list | grep -q 'acw-ingest-service'; then
     echo -e "- acw-ingest-service ${GREEN}is running${NC}"
     is=true
 else
@@ -17,9 +20,12 @@ else
     is=false
 fi
 
-if s6-rc -a list | grep -q 'metadata-change-detector'; then
-    echo -e "- metadata-change-detector ${GREEN}is running${NC}"
+if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet metadata-change-detector; then
+    echo -e "- metadata-change-detector ${GREEN}is running${NC} (systemd)"
     mc=true
+elif s6-rc -a list | grep -q 'metadata-change-detector'; then
+    echo -e "- metadata-change-detector ${GREEN}is running${NC}"
+    is=true
 else
     echo -e "- metadata-change-detector ${RED}is not running${NC}"
     mc=false

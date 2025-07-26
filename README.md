@@ -118,13 +118,13 @@ services:
 
 If you want to install Autocaliweb on your server without setting up Docker and Docker compose you can follow these steps (For an extensive installation and the uninstall guide look at the [relating wiki article](https://github.com/gelbphoenix/autocaliweb/wiki/Manual-Installation)):
 
-1. Download the prep_autocaliweb.sh file with the following command and check it:
+1. Download the `manual_install_acw.sh` file with the following command and check it:
 
 ```bash
 curl -Lo ./manual_install_acw.sh https://github.com/gelbphoenix/autocaliweb/raw/refs/heads/master/scripts/manual_install_acw.sh
 ```
 
-2. Make prep_autocaliweb.sh executeable and run it as root:
+2. Make `manual_install_acw.sh` executeable and run it as root:
 
 ```bash
 sudo chmod +x ./manual_install_acw.sh && sudo ./manual_install_acw.sh

@@ -110,7 +110,7 @@ check_dependencies() {
     local missing_deps=()
 
     # List of commands that should be present on the system during Install
-    for cmd in curl git python3 sqlite3 tar; do
+    for cmd in curl git python3 sqlite3 tar zip; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             missing_deps+=("$cmd")
         fi
@@ -130,7 +130,7 @@ check_dependencies() {
             install_system_deps "${missing_deps[@]}"
             # After installation, re-check if they are now available
             local recheck_missing_deps=()
-            for cmd in curl git python3 sqlite3 tar; do
+            for cmd in curl git python3 sqlite3 tar zip; do
                 if ! command -v "$cmd" >/dev/null 2>&1; then
                     recheck_missing_deps+=("$cmd")
                 fi
@@ -249,7 +249,7 @@ detect_installation_SCENARIO() {
         print_status "Detected: Extracted source without template"
     fi
 
-    print_status "$SCENARIO"
+    echo "$SCENARIO" # <<< CRITICAL: Echo the result so it can be captured
 }
 
 backup_existing_data() {
@@ -387,6 +387,7 @@ version_lt() {
 }
 
 check_directories() {
+    local current_scenario="$1" # Capture the first argument passed to this function
     print_status "Checking directory structure..."
 
     # Check if main directories exist
@@ -410,7 +411,7 @@ check_directories() {
         if [[ "$REPLY" =~ ^[Yy]$ ]]; then
             print_status "Checking for Autocaliweb updates..."
             # Check if INSTALL_DIR is a Git repository
-            if SCENARIO = "git_repo"; then
+            if [ "$current_scenario" = "git_repo" ]; then
                 print_status "Autocaliweb is a Git repository. Attempting to pull latest changes..."
                 (
                     cd "$INSTALL_DIR" || exit 1 # Change to install dir, exit if failed
@@ -664,6 +665,27 @@ install_kepubify() {
     download_with_retry "https://github.com/pgaskin/kepubify/releases/download/${KEPUBIFY_RELEASE}/kepubify-linux-${ARCH}" "/usr/bin/kepubify"
     chmod +x /usr/bin/kepubify
     echo "$KEPUBIFY_RELEASE" >/app/KEPUBIFY_RELEASE
+}
+
+make_koreader_plugin() {
+    print_status "Creating ACWSync plugin for KOReader..."
+    if [ -d "$INSTALL_DIR/koreader/plugins/acwsync.koplugin" ]; then
+        # Delete the digest and plugin zip files if exists
+        rm "$INSTALL_DIR/koreader/plugins/acwsync.koplugin/"*.digest 2>/dev/null || true
+        rm "$INSTALL_DIR/koreader/plugins/koplugin.zip" 2>/dev/null || true
+        cd "$INSTALL_DIR/koreader/plugins"
+        print_status "Calculating digest of plugin files..."
+        PLUGIN_DIGEST=$(find acwsync.koplugin -type f -exec sha256sum {} + | sha256sum | cut -d' ' -f1)
+        print_status "Plugin digest: $PLUGIN_DIGEST"
+        echo "Plugin files digest: $PLUGIN_DIGEST" > acwsync.koplugin/${PLUGIN_DIGEST}.digest
+        echo "Build date: $(date)" >> acwsync.koplugin/${PLUGIN_DIGEST}.digest
+        echo "Files included:" >> acwsync.koplugin/${PLUGIN_DIGEST}.digest
+        find acwsync.koplugin -type f -name "*.lua" -o -name "*.json" | sort >> acwsync.koplugin/${PLUGIN_DIGEST}.digest
+        zip -r koplugin.zip acwsync.koplugin/
+        print_status "Created koplugin.zip from acwsync.koplugin folder with digest file: ${PLUGIN_DIGEST}.digest"
+    else
+        print_warning "acwsync.koplugin directory not found, skipping plugin creation"
+    fi
 }
 
 # Install external tools (with detection)
@@ -1434,7 +1456,7 @@ main() {
     install_system_deps
 
     local install_SCENARIO=$(detect_installation_SCENARIO)
-    check_directories
+    check_directories "$install_SCENARIO"
     setup_autocaliweb
 
     # Check for dependency conflicts
@@ -1446,6 +1468,7 @@ main() {
     fi
 
     install_external_tools
+    make_koreader_plugin
     setup_configuration
     ensure_calibre_library
     initialize_databases

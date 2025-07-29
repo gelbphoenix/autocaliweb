@@ -1474,25 +1474,18 @@ main() {
     initialize_databases
     set_permissions
 
-    # Only create services if they don't exist or if they've changed
-    if [ "$EXISTING_INSTALLATION" != true ]; then
-        create_systemd_service
-        create_acw_ingest_service
-        create_auto_zipper_service
-        create_metadata_change_detector
-    fi
+    # Always create the services
+    create_systemd_service
+    create_acw_ingest_service
+    create_auto_zipper_service
+    create_metadata_change_detector
 
     # Only run auto_library for new installations
     if [ "$install_SCENARIO" != "with_template" ] && [ "$EXISTING_INSTALLATION" != true ]; then
         run_auto_library
     fi
 
-    # Use appropriate service start method
-    if [ "$EXISTING_INSTALLATION" = true ]; then
-        restart_acw_services
-    else
-        start_acw_services
-    fi
+    start_acw_services
 
     set_acw_permissions
     verify_installation

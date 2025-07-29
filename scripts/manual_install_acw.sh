@@ -529,7 +529,7 @@ download_and_extract_autocaliweb_source() {
         for item in "$INSTALL_DIR"/* "$INSTALL_DIR"/.*; do
         if [ -e "$item" ] && \
            [ "$item" != "$INSTALL_DIR/venv" ] && \
-           [ "$item" != "$INSTALL_DIR/scriptS" ] && \
+           [ "$item" != "$INSTALL_DIR/scripts" ] && \
            [[ ! "$item" =~ \.lock$ ]] && \
            [[ ! "$item" =~ \.db$ ]]; then
             rm -rf "$item"

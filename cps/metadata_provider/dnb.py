@@ -15,7 +15,7 @@ Based on:
 
 Modifications and adaptation for Autocaliweb:
     Copyright (C) 2025, Autocaliweb
-    Frist Creator UsamaFoad <usamafoad@gmail>
+    Frist Creator UsamaFoad <usamafoad@gmail.com>
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -41,7 +41,7 @@ from urllib.error import HTTPError
 import requests
 from lxml import etree
 
-from cps import logger
+from cps import logger, constants
 from cps.services.Metadata import MetaRecord, MetaSourceInfo, Metadata
 
 from cps import isoLanguages
@@ -168,13 +168,21 @@ class DNB(Metadata):
 
     def _execute_query(self, query, timeout=30):
         """Query DNB SRU API"""
+        headers = {  
+            'User-Agent': constants.USER_AGENT,  
+            'Accept': 'application/xml, text/xml',  
+            'Accept-Language': 'en-US,en;q=0.9,de;q=0.8',  
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive'
+        }  
+
         log.info(f'DNB Query: {query}')
 
         query_url = self.QUERYURL % (self.MAXIMUMRECORDS, quote(query))
         log.info(f'DNB Query URL: {query_url}')
 
         try:
-            response = requests.get(query_url, timeout=timeout)
+            response = requests.get(query_url, headers=headers, timeout=timeout)
             response.raise_for_status()
 
             xml_data = etree.XML(response.content)

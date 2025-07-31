@@ -1,7 +1,17 @@
 # -*- coding: utf-8 -*-
 
-#  This file is part of the Calibre-Web (https://github.com/janeczku/calibre-web)
-#    Copyright (C) 2021 OzzieIsaacs
+#                       Hardcover metadata provider for Autocaliweb.  
+#      
+# Provides book metadata search functionality using the Hardcover.app GraphQL API.  
+# Requires API token configuration in admin settings or user profile.  
+#
+# Based on:
+#    Hardcover metadata provider for Calibre-Web (https://github.com/janeczku/calibre-web)
+#    Original Copyright: Copyright (C) 2021 OzzieIsaacs
+#    Original License: GNU General Public License v3.0 (GPLv3)
+#
+# Modifications and adaptation for Autocaliweb:
+#    Copyright (C) 2025, Autocaliweb
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -16,7 +26,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-# Hardcover api document: https://Hardcover.gamespot.com/api/documentation
+# Hardcover api document: https://docs.hardcover.app/api/getting-started/
 from typing import Dict, List, Optional
 
 import requests
@@ -116,59 +126,100 @@ class Hardcover(Metadata):
                     headers=Hardcover.HEADERS,
                 )
                 result.raise_for_status()
+                response_data = result.json()
+                
+                # Check for GraphQL errors  
+                if "errors" in response_data:  
+                    log.error(f"GraphQL errors: {response_data['errors']}")  
+                    return []
+                    
+                # Validate response structure  
+                if "data" not in response_data:  
+                    log.warning("Invalid response structure: missing 'data' field")  
+                    return []  
+
+            except requests.exceptions.RequestException as e:  
+                log.warning(f"HTTP request failed: {e}")  
+                return []  
+            except ValueError as e:  
+                log.warning(f"JSON parsing failed: {e}")  
+                return []  
             except Exception as e:
-                log.warning(e)
-                return None
-            if edition_search:
-                result = result.json()["data"]["books"][0]
-                val = self._parse_edition_results(result=result, generic_cover=generic_cover, locale=locale)
-            else:
-                for result in result.json()["data"]["search"]["results"]["hits"]:
-                    match = self._parse_title_result(
-                        result=result, generic_cover=generic_cover, locale=locale
-                    )
-                    val.append(match)
+                log.warning(f"Unexpected error: {e}")
+                return [] # Return empty list instead of None
+
+            # Process results with error handling
+            try:
+                if edition_search:
+                    books_data = self._safe_get(response_data, "data", "books", default=[])
+                    if books_data:
+                        result = books_data[0]
+                        val = self._parse_edition_results(result=result, generic_cover=generic_cover, locale=locale)
+                else:
+                    search_results = self._safe_get(response_data, "data", "search", "results", "hits", default=[])
+                    for result in search_results:
+                        match = self._parse_title_result(
+                            result=result, generic_cover=generic_cover, locale=locale
+                        )
+                        if match:  # Only add valid results
+                            val.append(match)
+            except Exception as e:
+                log.warning(f"Error processing results: {e}")
+                return []
+
         return val
-    
+
     def _parse_title_result(
         self, result: Dict, generic_cover: str, locale: str
-    ) -> MetaRecord:
-        series = result["document"].get("featured_series",{}).get("series_name", "")
-        series_index = result["document"].get("featured_series",{}).get("position", "")
-        match = MetaRecord(
-            id=result["document"].get("id",""),
-            title=result["document"].get("title",""),
-            authors=result["document"].get("author_names", []),
-            url=self._parse_title_url(result, ""),
-            source=MetaSourceInfo(
-                id=self.__id__,
-                description=Hardcover.DESCRIPTION,
-                link=Hardcover.META_URL,
-            ),
-            series=series,
-        )
-        match.cover = result["document"]["image"].get("url", generic_cover)
-        
-        match.description = result["document"].get("description","")
-        match.publishedDate = result["document"].get(
-            "release_date", "")
-        match.series_index = series_index
-        match.tags = result["document"].get("genres",[])
-        match.identifiers = {
-            "hardcover-id": match.id,
-            "hardcover": result["document"].get("slug", "")
-        }
-        return match
+    ) -> Optional[MetaRecord]:
+        try:
+            document = self._safe_get(result, "document", default={})
+            if not document:
+                return None
+
+            series_info = self._safe_get(document, "featured_series", default={})
+            series = self._safe_get(series_info, "series_name", default="")
+            series_index = self._safe_get(series_info, "position", default="")
+
+            match = MetaRecord(
+                id=self._safe_get(document, "id", default=""),
+                title=self._safe_get(document, "title", default=""),
+                authors=self._safe_get(document, "author_names", default=[]),
+                url=self._parse_title_url(result, ""),
+                source=MetaSourceInfo(
+                    id=self.__id__,
+                    description=Hardcover.DESCRIPTION,
+                    link=Hardcover.META_URL,
+                ),
+                series=series,
+            )
+
+            # Safe cover image access
+            image_data = self._safe_get(document, "image", default={})
+            match.cover = self._safe_get(image_data, "url", default=generic_cover)
+
+            match.description = self._safe_get(document, "description", default="")
+            match.publishedDate = self._safe_get(document, "release_date", default="")
+            match.series_index = series_index
+            match.tags = self._safe_get(document, "genres", default=[])
+            match.identifiers = {
+                "hardcover-id": match.id,
+                "hardcover": self._safe_get(document, "slug", default="")
+            }
+            return match
+        except Exception as e:
+            log.warning(f"Error parsing title result: {e}")
+            return None
 
     def _parse_edition_results(
         self, result: Dict, generic_cover: str, locale: str
-    ) -> MetaRecord:
+    ) -> List[MetaRecord]:
         editions = list()
         id = result.get("id","")
         for edition in result["editions"]:
-            match = MetaRecord(    
+            match = MetaRecord(
                 id=id,
-                title=edition.get("title",""),       
+                title=edition.get("title",""),
                 authors=self._parse_edition_authors(edition,[]),
                 url=self._parse_edition_url(result, edition, ""),
                 source=MetaSourceInfo(
@@ -197,13 +248,16 @@ class Hardcover(Metadata):
             match.format = Hardcover.FORMATS[edition.get("reading_format_id",0)]
             editions.append(match)
         return editions
-    
+
     @staticmethod
     def _parse_title_url(result: Dict, url: str) -> str:
-        hardcover_slug = result["document"].get("slug", "")
-        if hardcover_slug:
-            return f"https://hardcover.app/books/{hardcover_slug}"
+        # Use safe access instead of direct dictionary access  
+        document = result.get("document", {})  
+        hardcover_slug = document.get("slug", "")  
+        if hardcover_slug:  
+            return f"https://hardcover.app/books/{hardcover_slug}"  
         return url
+
 
     @staticmethod
     def _parse_edition_url(result: Dict, edition: Dict, url: str) -> str:
@@ -212,23 +266,41 @@ class Hardcover(Metadata):
         if edition:
             return f"https://hardcover.app/books/{slug}/editions/{edition}"
         return url
-    
+
     @staticmethod
     def _parse_edition_authors(edition: Dict, authors: List[str]) -> List[str]:
         try:
-            return [author["author"]["name"] for author in edition.get("contributions",[]) if "author" in author and "name" in author["author"]]
+            contributions = edition.get("contributions", [])
+            if not isinstance(contributions, list):
+                return authors
+
+            result = []
+            for contrib in contributions:
+                if isinstance(contrib, dict) and "author" in contrib:
+                    author_data = contrib["author"]
+                    if isinstance(author_data, dict) and "name" in author_data:
+                        result.append(author_data["name"])
+            return result if result else authors
         except Exception as e:
-            log.warning(e)
+            log.warning(f"Error parsing edition authors: {e}")
             return authors
 
     @staticmethod
     def _parse_tags(result: Dict, tags: List[str]) -> List[str]:
         try:
-            return [item["tag"] for item in result["cached_tags"] if "tag" in item]
+            cached_tags = result.get("cached_tags", [])
+            if not isinstance(cached_tags, list):
+                return tags
+
+            result_tags = []
+            for item in cached_tags:
+                if isinstance(item, dict) and "tag" in item and item["tag"]:
+                    result_tags.append(item["tag"])
+            return result_tags if result_tags else tags
         except Exception as e:
-            log.warning(e)
+            log.warning(f"Error parsing tags: {e}")
             return tags
-        
+
     @staticmethod
     def _parse_languages(edition: Dict, locale: str) -> List[str]:
         language_iso = (edition.get("language") or {}).get("code3","")
@@ -238,3 +310,16 @@ class Hardcover(Metadata):
             else []
         )
         return languages
+
+    @staticmethod
+    def _safe_get(data, *keys, default=None):
+        """Safely get nested dictionary values"""
+        try:
+            for key in keys:
+                if isinstance(data, dict) and key in data:
+                    data = data[key]
+                else:
+                    return default
+            return data
+        except (TypeError, KeyError):
+            return default

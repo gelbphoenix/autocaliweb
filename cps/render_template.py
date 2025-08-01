@@ -121,11 +121,15 @@ def get_sidebar_config(kwargs=None):
 
 # Checks if an update for CWA is available, returning True if yes
 def acw_update_available() -> tuple[bool, str, str]:
-    with open("/app/ACW_RELEASE", 'r') as f:
-        current_version = f.read().strip()
-    response = requests.get("https://api.github.com/repos/gelbphoenix/autocaliweb/releases/latest")
-    tag_name = response.json().get('tag_name', current_version)
-    return (tag_name != current_version), current_version, tag_name
+    try:
+        with open("/app/ACW_RELEASE", 'r') as f:
+            current_version = f.read().strip()
+        response = requests.get("https://api.github.com/repos/gelbphoenix/autocaliweb/releases/latest")
+        tag_name = response.json().get('tag_name', current_version)
+        return (tag_name != current_version), current_version, tag_name
+    except Exception as e:
+        print(f"[acw-update-notification-service] Error checking for updates: {e}", flush=True)
+        return False, "Unknown", "Unknown"
 
 # Gets the date the last cwa update notification was displayed
 def get_acw_last_notification() -> str:

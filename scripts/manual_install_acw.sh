@@ -523,18 +523,30 @@ download_and_extract_autocaliweb_source() {
         print_error "Failed to download Autocaliweb source. Aborting."
         exit 1
     fi
-    print_status "Cleaning existing Autocaliweb source in $INSTALL_DIR before extraction (excluding scripts, *.db, *.lock, and venv)..."
-    # Iterate over all items in INSTALL_DIR
-    # Delete everything *except* the scripts & venv directories, and any *.db or .lock files
-        for item in "$INSTALL_DIR"/* "$INSTALL_DIR"/.*; do
-        if [ -e "$item" ] && \
-           [ "$item" != "$INSTALL_DIR/venv" ] && \
-           [ "$item" != "$INSTALL_DIR/scripts" ] && \
-           [[ ! "$item" =~ \.lock$ ]] && \
-           [[ ! "$item" =~ \.db$ ]]; then
-            rm -rf "$item"
-        fi
-    done
+    print_status "Cleaning existing Autocaliweb source in $INSTALL_DIR before extraction (preserving user data, logs, and configuration directories)..."
+    # Define files/directories that should be cleaned up during installation
+    CLEANUP_ITEMS=(
+        "cps"
+        "requirements.txt"
+        "optional-requirements.txt"
+        "pyproject.toml"
+        "MANIFEST.in"
+        "Dockerfile"
+        "root"
+        ".dockerignore"
+        "README.md"
+        "LICENSE"
+    )
+        # Clean up only specific items
+        for item in "${CLEANUP_ITEMS[@]}"; do
+            if [ -e "$INSTALL_DIR/$item" ]; then
+                if [ "$VERBOSE" = "1" ]; then
+                    print_status "Removing $item..."
+                fi
+                rm -rf "$INSTALL_DIR/$item" >/dev/null 2>&1
+            fi
+        done
+
     tar xf /tmp/autocaliweb.tar.gz -C "$INSTALL_DIR" --strip-components=1
     if [ $? -ne 0 ]; then
         print_error "Failed to extract Autocaliweb source. Aborting."
@@ -1490,7 +1502,7 @@ main() {
     set_acw_permissions
     verify_installation
     verify_services
-            create_startup_script
+    create_startup_script
 
 
 print_status "Installation completed successfully!"

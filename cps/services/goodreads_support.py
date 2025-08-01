@@ -20,6 +20,7 @@ import time
 from functools import reduce
 import requests
 
+from cps import constants
 from goodreads.client import GoodreadsClient
 from goodreads.request import GoodreadsRequest
 import xmltodict
@@ -54,8 +55,7 @@ class my_GoodreadsRequest(GoodreadsRequest):
 
     def request(self):
         resp = requests.get(self.host+self.path, params=self.params,
-                            headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:125.0) "
-                                                   "Gecko/20100101 Firefox/125.0"})
+                            headers={"User-Agent": constants.USER_AGENT})
         if resp.status_code != 200:
             raise GoodreadsRequestException(resp.reason, self.path)
         if self.req_format == 'xml':

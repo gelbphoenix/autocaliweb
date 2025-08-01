@@ -12041,3 +12041,21 @@ body.me .modal-content,
 body.edituser .modal-content {
   top: 60px;
 }
+
+#btn-book-convert {
+  text-wrap: wrap;
+}
+
+#btn-book-convert span {
+  margin-inline-end: 5px;
+}
+
+#form-upload-format div div label {
+  text-wrap: wrap;
+}
+
+@media only screen and (min-width: 1050px) {
+  #btn-book-convert span {
+    display: none;
+  }
+}

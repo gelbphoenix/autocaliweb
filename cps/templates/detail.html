@@ -52,29 +52,68 @@
                             </div>
                         {% endif %}
                         {% if current_user.kindle_mail and entry.email_share_list %}
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            {% if entry.email_share_list.__len__() == 1 %}
-                                <div class="btn-group" role="group">
-                                    <button id="sendbtn" class="btn btn-primary sendbtn-form" data-href="{{url_for('web.send_to_ereader', book_id=entry.id, book_format=entry.email_share_list[0]['format'], convert=entry.email_share_list[0]['convert'])}}">
-                                        <span class="glyphicon glyphicon-send"></span> {{entry.email_share_list[0]['text']}}
-                                    </button>
-                                </div>
-                            {% else %}
-                                <div class="btn-group" role="group">
-                                    <button id="sendbtn2" type="button" class="btn btn-primary dropdown-toggle"
-                                            data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                        <span class="glyphicon glyphicon-send"></span>{{ _('Send to eReader') }}
-                                        <span class="caret"></span>
-                                    </button>
-                                    <ul class="dropdown-menu" aria-labelledby="send-to-ereader">
-                                        {% for format in entry.email_share_list %}
-                                            <li>
-                                                <a class="sendbtn-form" data-href="{{url_for('web.send_to_ereader', book_id=entry.id, book_format=format['format'], convert=format['convert'])}}">{{ format['text'] }}</a>
-                                            </li>
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-primary" id="sendToEReaderBtn" data-book-id="{{ entry.id }}">
+                                    <span class="glyphicon glyphicon-send"></span> {{ _('Send to eReader') }}
+                                </button>
+                            </div>
+
+                            <!-- Email Selection Modal -->
+                            <div class="modal fade" id="emailSelectModal" tabindex="-1" role="dialog"
+                                 data-book-id="{{ entry.id }}"
+                                 data-no-email-message="{{ _('Please select at least one email address') }}"
+                                 data-error-message="{{ _('Error sending email') }}">
+                                <div class="modal-dialog" role="document">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <button type="button" class="close" data-dismiss="modal">
+                                                <span>&times;</span>
+                                            </button>
+                                            <h4 class="modal-title">{{ _('Select eReader Email Addresses') }}</h4>
+                                        </div>
+                                        <div class="modal-body">
+                            <form id="emailSelectForm">
+                                <div class="form-group">
+                                    <fieldset>
+                                        <legend>{{ _('Choose email addresses:') }}</legend>
+                                        <div class="checkbox">
+                                            <label for="selectAllEmails">
+                                                <input type="checkbox" id="selectAllEmails" checked>
+                                                <strong>{{ _('Select All') }}</strong>
+                                            </label>
+                                        </div>
+                                        <hr>
+                                        {% for email in current_user.kindle_mail.split(',') %}
+                                            <div class="checkbox">
+                                                <label for="email-{{ loop.index }}">
+                                                    <input type="checkbox" id="email-{{ loop.index }}" name="selected_emails" value="{{ email.strip() }}" checked>
+                                                    {{ email.strip() }}
+                                                </label>
+                                            </div>
                                         {% endfor %}
-                                    </ul>
+                                    </fieldset>
                                 </div>
-                            {% endif %}
+
+                                <div class="form-group">
+                                    <label for="format_selection">{{ _('Select format:') }}</label>
+                                    <select id="format_selection" name="format_selection" class="form-control">
+                                        {% for format in entry.email_share_list %}
+                                            <option value="{{ format['format'] }}" data-convert="{{ format['convert'] }}">
+                                                {{ format['text'] }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </form>
+                        </div>
+
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-default" data-dismiss="modal">{{ _('Cancel') }}</button>
+                                            <button type="button" class="btn btn-primary" id="sendSelectedBtn">{{ _('Send') }}</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         {% endif %}
                     {% endif %}
                     {% if entry.reader_list and current_user.role_viewer() %}
@@ -109,13 +148,6 @@
                                     <span class="caret"></span>
                                 </button>
                                 <ul class="dropdown-menu" aria-labelledby="listen-in-browser">
-                                    {% for format in entry.reader_list %}
-                                        <li><a target="_blank" href="{{ url_for('web.read_book', book_id=entry.id, book_format=format) }}">{{ format }}</a>
-                                        </li>
-                                    {% endfor %}
-                                </ul>
-                                <ul class="dropdown-menu" aria-labelledby="listen-in-browser">
-
                                     {% for format in entry.data %}
                                         {% if format.format|lower in entry.audio_entries %}
                                             <li><a target="_blank"
@@ -197,9 +229,9 @@
             {% if entry.publishers|length > 0 %}
                 <div class="publishers">
                     <p>
-				      <span>{{ _('Publisher') }}:
-				          <a href="{{ url_for('web.books_list', data='publisher', sort_param='stored', book_id=entry.publishers[0].id ) }}">{{ entry.publishers[0].name }}</a>
-				      </span>
+                      <span>{{ _('Publisher') }}:
+                          <a href="{{ url_for('web.books_list', data='publisher', sort_param='stored', book_id=entry.publishers[0].id ) }}">{{ entry.publishers[0].name }}</a>
+                      </span>
                     </p>
                 </div>
             {% endif %}
@@ -327,9 +359,9 @@
                                                class="btn btn-sm btn-default" role="button"
                                                data-shelf-action="remove"
                                             >
-								              <span {% if not shelf.is_public or current_user.role_edit_shelfs() %}
-								                  class="glyphicon glyphicon-remove"
-								              {% endif %}></span> {{ shelf.name }}{% if shelf.is_public == 1 %} {{ _('(Public)') }}{% endif %}
+                                              <span {% if not shelf.is_public or current_user.role_edit_shelfs() %}
+                                                  class="glyphicon glyphicon-remove"
+                                              {% endif %}></span> {{ shelf.name }}{% if shelf.is_public == 1 %} {{ _('(Public)') }}{% endif %}
                                             </a>
                                         {% endif %}
                                     {% endfor %}
@@ -371,6 +403,7 @@
 </script>
 <script src="{{ url_for('static', filename='js/details.js') }}"></script>
 <script src="{{ url_for('static', filename='js/fullscreen.js') }}"></script>
+<script src="{{ url_for('static', filename='js/email_selection.js') }}"></script>
 <script type="text/javascript">
 </script>
 

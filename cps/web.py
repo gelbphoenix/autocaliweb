@@ -100,32 +100,45 @@ _start_time = time.time()
 def add_security_headers(resp):
     default_src = ([host.strip() for host in config.config_trustedhosts.split(',') if host] +
                    ["'self'", "'unsafe-inline'", "'unsafe-eval'"])
+    
     csp = "default-src " + ' '.join(default_src)
     if request.endpoint == "web.read_book" and config.config_use_google_drive:
         csp +=" blob: "
+
     csp += "; font-src 'self' data:"
     if request.endpoint == "web.read_book":
         csp += " blob: "
+
     csp += "; connect-src 'self'"
     if config.config_use_hardcover:
         csp += " assets.hardcover.app"
     if config.config_use_goodreads:
-        csp += " images.gr-assets.com i.gr-assets.com s.gr-assets.com"
+        csp += " images.gr-assets.com s.gr-assets.com i.gr-assets.com"
+    if request.endpoint == "edit-book.show_edit_book" or request.path.startswith("/metadata/"):
+        if not config.config_use_goodreads:
+            csp += " images.gr-assets.com i.gr-assets.com s.gr-assets.com"
+        csp += " portal.dnb.de images.isbndb.com books.google.com images-na.ssl-images-amazon.com m.media-amazon.com img9.doubanio.com comicvine.gamespot.com s.lubimyczytac.pl"
+    if request.endpoint == "web.service_worker":
+        csp += " *"
+
     csp += "; img-src 'self' data:"
     if request.path.startswith("/author/") and config.config_use_goodreads:
         csp += " images.gr-assets.com i.gr-assets.com s.gr-assets.com"
     if request.path.startswith("/author/") and config.config_use_hardcover:
         csp += " assets.hardcover.app img.hardcover.app"
-    if request.endpoint == "edit-book.show_edit_book" or config.config_use_google_drive:
+    if request.endpoint == "edit-book.show_edit_book" or request.endpoint == "web.service_worker" or config.config_use_google_drive:
         csp += " *"
     if request.endpoint == "web.read_book":
         csp += " blob: ; style-src-elem 'self' blob: 'unsafe-inline'"
+
     csp += "; object-src 'none';"
     resp.headers['Content-Security-Policy'] = csp
+
     resp.headers['X-Content-Type-Options'] = 'nosniff'
     resp.headers['X-Frame-Options'] = 'SAMEORIGIN'
     resp.headers['X-XSS-Protection'] = '1; mode=block'
     resp.headers['Strict-Transport-Security'] = 'max-age=31536000';
+
     return resp
 
 
@@ -869,20 +882,7 @@ def health_check():
 @web.route("/service-worker.js")
 def service_worker():
     try:
-        resp = make_response(send_from_directory(constants.STATIC_DIR, "js/service-worker.js", mimetype='application/javascript'))
-        headers = [
-            "default-src 'self';",
-            "font-src 'self' data:;",
-            "img-src 'self' portal.dnb.de images.isbndb.com books.google.com images-na.ssl-images-amazon.com m.media-amazon.com img9.doubanio.com comicvine.gamespot.com s.lubimyczytac.pl data:;",
-            "connect-src 'self';",
-            "object-src 'none';"
-        ]
-        if config.config_use_hardcover:
-            headers[3] += " assets.hardcover.app"
-        if config.config_use_goodreads:
-            headers[3] += " images.gr-assets.com i.gr-assets.com s.gr-assets.com"
-        resp.headers['Content-Security-Policy'] = "; ".join(headers)
-        return resp
+        return make_response(send_from_directory(constants.STATIC_DIR, "js/service-worker.js", mimetype='application/javascript'))
     except FileNotFoundError:
         log.error("Service worker file not found")
         abort(404)

@@ -12059,3 +12059,18 @@ body.edituser .modal-content {
     display: none;
   }
 }
+/* Email Selection Modal Positioning */
+#emailSelectModal {
+    position: fixed;
+    top: 70px; /* Adjusted based on navbar height */
+    left:calc(50% + 20px); /* Adding 20px looks better*/
+    transform: translateX(-50%);
+    z-index: 1050;
+    margin: 0;
+}
+
+#emailSelectModal .modal-dialog {
+    margin: 0;
+    width: 90%;
+    max-width: 600px;
+}

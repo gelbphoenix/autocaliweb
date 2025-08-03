@@ -139,7 +139,10 @@ $(function () {
             $.ajax({
                 url: getPath() + "/metadata/search",
                 type: "POST",
-                data: { query: keyword },
+                data: {
+                    query: keyword,
+                    csrf_token: $("input[name='csrf_token']").val(),
+                },
                 dataType: "json",
                 success: function success(data) {
                     if (data.length) {

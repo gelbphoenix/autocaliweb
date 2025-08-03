@@ -242,8 +242,20 @@ class NewBookProcessor:
         if self.target_format == "epub" and self.is_kindle_epub_fixer:
             self.run_kindle_epub_fixer(book_path, dest=self.tmp_conversion_dir)
             fixed_epub_path = Path(self.tmp_conversion_dir) / os.path.basename(book_path)
-            if Path(fixed_epub_path).exists():
-                book_path = str(fixed_epub_path)
+            try:
+                if Path(fixed_epub_path).exists():
+                    book_path = str(fixed_epub_path)
+            except OSError as e:
+                if e.errno == 36:  # File name too long
+                    print(f"[ingest-processor] The file name {os.path.basename(book_path)} is too long for the filesystem. Please rename the file to a shorter name and try again.", flush=True)
+                    return
+                else:
+                    print(f"[ingest-processor] An error occurred while processing {os.path.basename(book_path)} with the kindle-epub-fixer. See the following error:\n{e}", flush=True)
+                    raise
+        
+        if not os.path.exists(book_path):
+            print(f"[ingest-processor]: The file {book_path} does not exist. Skipping import.", flush=True)
+            return
 
         print("[ingest-processor]: Importing new book to ACW...")
         import_path = Path(book_path)

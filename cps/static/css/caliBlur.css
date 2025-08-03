@@ -12059,18 +12059,28 @@ body.edituser .modal-content {
     display: none;
   }
 }
+
 /* Email Selection Modal Positioning */
 #emailSelectModal {
-    position: fixed;
-    top: 70px; /* Adjusted based on navbar height */
-    left:calc(50% + 20px); /* Adding 20px looks better*/
-    transform: translateX(-50%);
-    z-index: 1050;
-    margin: 0;
+  position: fixed;
+  top: 70px; /* Adjusted based on navbar height */
+  left: calc(50% + 20px); /* Adding 20px looks better*/
+  transform: translateX(-50%);
+  z-index: 1050;
+  margin: 0;
 }
 
 #emailSelectModal .modal-dialog {
-    margin: 0;
-    width: 90%;
-    max-width: 600px;
+  margin: 0;
+  width: 90%;
+  max-width: 600px;
+}
+
+.book-edit-sidebar {
+  height: calc(100vh - 70px);
+  overflow-y: auto;
+}
+
+.book-edit-sidebar .more-stuff {
+  margin-bottom: 20px;
 }

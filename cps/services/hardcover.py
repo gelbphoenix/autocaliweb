@@ -20,7 +20,7 @@ from datetime import datetime
 import requests
 import time
 
-from .. import logger
+from .. import logger, constants
 
 log = logger.create()
 
@@ -51,18 +51,15 @@ USER_BOOK_FRAGMENT = """
 _AUTHORS_CACHE = {}
 _CACHE_TIMEOUT = 167 * 60 * 60  # 167 hours (in seconds)
 _AUTHORS_BOOKS_CACHE = {}
-now = time.time()
 
 class HardcoverClient:
     def __init__(self, token):
         self.endpoint = GRAPHQL_ENDPOINT
 
-        version = open("/app/ACW_RELEASE", "r").read().strip()
-
         self.headers = {
             "Content-Type": "application/json",
             "Authorization" : f"Bearer {token}",
-            "User-Agent": f"Autocaliweb/{version}",
+            "User-Agent": constants.USER_AGENT,
         }
         self.privacy = self.get_privacy()
         
@@ -241,12 +238,13 @@ class HardcoverClient:
             if edition_id is not None:
                 identifiers["hardcover-edition"] = edition_id
 
+        log.debug("Parsed identifiers: %s", identifiers)
         return identifiers
     
     def get_author_info(self, author):
         author_info = _AUTHORS_CACHE.get(author, None)
         if author_info:
-            if now < author_info["_timestamp"] + _CACHE_TIMEOUT:
+            if time.time() < author_info["_timestamp"] + _CACHE_TIMEOUT:
                 return author_info["data"]
             del _AUTHORS_CACHE[author]
 
@@ -268,7 +266,7 @@ class HardcoverClient:
         if author_info:
             _AUTHORS_CACHE[author] = {
                 "data": author_info,
-                "_timestamp": now,
+                "_timestamp": time.time(),
             }
 
         return author_info
@@ -276,7 +274,7 @@ class HardcoverClient:
     def get_other_author_books(self, author, library_books):
         cached_books = _AUTHORS_BOOKS_CACHE.get(author, None)
         if cached_books:
-            if now < cached_books["_timestamp"] + _CACHE_TIMEOUT:
+            if time.time() < cached_books["_timestamp"] + _CACHE_TIMEOUT:
                 return cached_books["data"]
             del _AUTHORS_BOOKS_CACHE[author]
 
@@ -310,7 +308,7 @@ class HardcoverClient:
 
         _AUTHORS_BOOKS_CACHE[author] = {
             "data": books,
-            "_timestamp": now,
+            "_timestamp": time.time(),
         }
 
         return books

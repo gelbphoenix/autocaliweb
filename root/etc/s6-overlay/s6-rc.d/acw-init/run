@@ -80,21 +80,31 @@ echo "[acw-init] ACW-init complete! Service exiting now..."
 #  Set required permissions
 #------------------------------------------------------------------------------------------------------------------------
 
-declare -a requiredDirs=("/config" "/calibre-library" "/app/autocaliweb")
+# Always ensure internal paths are owned by abc:abc
+declare -a requiredDirs=("/config" "/app/autocaliweb")
+
+# Only include the library if explicitly enabled
+if [ "${ACW_CHOWN_LIBRARY:-false}" = "true" ]; then
+    requiredDirs+=("/calibre-library")
+fi
 
 dirs=$(printf ", %s" "${requiredDirs[@]}")
 dirs=${dirs:1}
 
-echo "[acw-init] Recursively setting ownership of everything in$dirs to abc:abc..."
+echo "[acw-init] Recursively setting ownership of:${dirs} to abc:abc..."
 
 for d in "${requiredDirs[@]}"
 do
-    chown -R abc:abc $d
-    if [[ $? == 0 ]]
-    then
-        echo "[acw-init] Successfully set permissions for '$d'!"
-    elif [[ $? > 0 ]]
-    then
-        echo "[acw-init] Service could not successfully set permissions for '$d' (see errors above)."
+    if [ -d "$d" ]; then
+        chown -R abc:abc "$d"
+        if [[ $? == 0 ]]
+        then
+            echo "[acw-init] Successfully set permissions for '$d'!"
+        elif [[ $? > 0 ]]
+        then
+            echo "[acw-init] Service could not successfully set permissions for '$d' (see errors above)."
+        fi
+    else
+        echo "[acw-init] Skipping '$d' (directory does not exist)."
     fi
 done

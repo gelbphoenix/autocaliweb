@@ -93,6 +93,7 @@ class NewBookProcessor:
             con.close()
             return None
         
+    @staticmethod
     def wait_for_file_stable(filepath, stable_seconds=5, timeout=120):
         """Waits for a file to become stable, meaning it hasn't changed in size for a certain period of time."""
         last_size = -1
@@ -349,7 +350,7 @@ def main(filepath=sys.argv[1]):
         return
     
     try:
-        self.wait_for_file_stable(filepath)
+        NewBookProcessor.wait_for_file_stable(filepath)
     except TimeoutError as e:
         print(f"[ingest-processor] Skipping {filepath} due to timeout error: {e}", flush=True)
         return

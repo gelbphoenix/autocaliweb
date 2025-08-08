@@ -160,15 +160,12 @@ def bind_oauth_or_register(provider_id, provider_user_id, redirect_url, provider
                     log.error_or_exception(ex)
                     ub.session.rollback()
             else:
-                flash(_("Login failed, No User Linked With OAuth Account"), category="error")
-            log.info('Login failed, No User Linked With OAuth Account')
-            return redirect(url_for('web.login'))
-            # return redirect(url_for('web.login'))
-            # if config.config_public_reg:
-            #   return redirect(url_for('web.register'))
-            # else:
-            #    flash(_("Public registration is not enabled"), category="error")
-            #    return redirect(url_for(redirect_url))
+                log.info('Login failed, No User Linked With OAuth Account')
+                if config.config_public_reg:
+                    return redirect(url_for('web.register'))
+                else:
+                    flash(_("Public registration is not enabled"), category="error")
+                    return redirect(url_for(redirect_url))
     except (NoResultFound, AttributeError):
         return redirect(url_for(redirect_url))
 

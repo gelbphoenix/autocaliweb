@@ -39,6 +39,32 @@ backup_destinations = {
         if entry.is_dir()
     }
 
+def wait_for_file_stable(filepath, stable_seconds=5, timeout=120):
+    """Waits for a file to become stable, meaning it hasn't changed in size for a certain period of time."""
+    last_size = -1
+    stable_time = 0
+    start_time = time.time()
+
+    while True:
+        try: 
+            current_size = os.path.getsize(filepath)
+        except FileNotFoundError:
+            current_size = -1
+
+        if current_size == last_size and current_size != -1:
+            stable_time += 1
+        else:
+            stable_time = 0
+            last_size = current_size
+
+        if stable_time >= stable_seconds:
+            break
+
+        if time.time() - start_time > timeout:
+            raise TimeoutError(f"File {filepath} did not stabilize within {timeout} seconds.")
+            
+        time.sleep(1)
+
 class NewBookProcessor:
     def __init__(self, filepath: str):
         self.db = ACW_DB()
@@ -92,32 +118,6 @@ class NewBookProcessor:
         else:
             con.close()
             return None
-        
-    def wait_for_file_stable(filepath, stable_seconds=5, timeout=120):
-        """Waits for a file to become stable, meaning it hasn't changed in size for a certain period of time."""
-        last_size = -1
-        stable_time = 0
-        start_time = time.time()
-
-        while True:
-            try: 
-                current_size = os.path.getsize(filepath)
-            except FileNotFoundError:
-                current_size = -1
-
-            if current_size == last_size and current_size != -1:
-                stable_time += 1
-            else:
-                stable_time = 0
-                last_size = current_size
-
-            if stable_time >= stable_seconds:
-                break
-
-            if time.time() - start_time > timeout:
-                raise TimeoutError(f"File {filepath} did not stabilize within {timeout} seconds.")
-            
-            time.sleep(1)
 
     def get_dirs(self, dirs_json_path: str) -> tuple[str, str, str]:
         dirs = {}
@@ -349,7 +349,7 @@ def main(filepath=sys.argv[1]):
         return
     
     try:
-        self.wait_for_file_stable(filepath)
+        wait_for_file_stable(filepath)
     except TimeoutError as e:
         print(f"[ingest-processor] Skipping {filepath} due to timeout error: {e}", flush=True)
         return

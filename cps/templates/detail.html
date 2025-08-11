@@ -53,11 +53,10 @@
                         {% endif %}
                         {% if current_user.kindle_mail and entry.email_share_list %}
                             <div class="btn-group" role="group">
-                                <button type="button" class="btn btn-primary" id="sendToEReaderBtn" data-book-id="{{ entry.id }}">
+                                <button id="sendToEReaderBtn" type="button" class="btn btn-primary" data-book-id="{{ entry.id }}">
                                     <span class="glyphicon glyphicon-send"></span> {{ _('Send to eReader') }}
                                 </button>
                             </div>
-
                             <!-- Email Selection Modal -->
                             <div class="modal fade" id="emailSelectModal" tabindex="-1" role="dialog"
                                  data-book-id="{{ entry.id }}"

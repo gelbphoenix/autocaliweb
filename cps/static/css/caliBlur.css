@@ -4114,6 +4114,7 @@ body.book .author {
   position: absolute;
   left: 15px;
   pointer-events: none;
+  z-index: -1;
 }
 
 .book-meta > .bookinfo > .rating {
@@ -4249,6 +4250,7 @@ div.btn-group[role="group"][aria-label="Download, send to Kindle, reading"]
 #btnGroupDrop1,
 #readbtn,
 #sendbtn,
+#sendToEReaderBtn,
 .book-meta
   .btn-toolbar
   > .btn-group
@@ -4286,8 +4288,13 @@ div.btn-group[role="group"][aria-label="Download, send to Kindle, reading"]
   > span,
 .book-meta .btn-toolbar > .btn-group > .btn-warning > span,
 .btn-toolbar > .btn-group > #btnGroupDrop2 > span,
-.btn-toolbar > .btn-group > .btn-group > #btnGroupDrop2 > span {
+.btn-toolbar > .btn-group > .btn-group > #btnGroupDrop2 > span,
+#sendToEReaderBtn > span {
   color: hsla(0, 0%, 100%, 0.7);
+}
+
+#sendToEReaderBtn > span {
+  left: 15px;
 }
 
 #add-to-shelf:hover span,
@@ -5621,6 +5628,10 @@ body.shelf.modal-open > .container-fluid {
   border-color: initial;
 }
 
+#remove-from-shelves {
+  z-index: -1;
+}
+
 #remove-from-shelves > .btn {
   background-color: rgba(0, 0, 0, 0.15);
   color: hsla(0, 0%, 100%, 0.7);
@@ -5696,7 +5707,16 @@ body.shelf.modal-open > .container-fluid {
 #remove-from-shelves + .tags {
   margin-top: -25px;
   z-index: 9;
-  position: relative;
+  position: static !important;
+}
+
+#remove-from-shelves + .identifiers .glyphicon,
+#remove-from-shelves + .languages .glyphicon,
+#remove-from-shelves + .publishers .glyphicon,
+#remove-from-shelves + .publishing-date .glyphicon,
+#remove-from-shelves + .tags .glyphicon,
+.book-meta > .bookinfo > .tags .glyphicon {
+  position: static !important;
 }
 
 #remove-from-shelves > a.btn:last-of-type {
@@ -12063,7 +12083,7 @@ body.edituser .modal-content {
 /* Email Selection Modal Positioning */
 #emailSelectModal {
   position: fixed;
-  top: 70px; /* Adjusted based on navbar height */
+  top: 60px; /* Adjusted based on navbar height */
   left: calc(50% + 20px); /* Adding 20px looks better*/
   transform: translateX(-50%);
   z-index: 1050;

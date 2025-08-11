@@ -41,7 +41,7 @@ _This software is a fork of [Calibre-Web](https://github.com/janeczku/calibre-we
 - eBook conversion through Calibre binaries
 - eBook download restriction to logged-in users
 - Public user registration support
-- Send eBooks to E-Readers with a single click
+- Send eBooks to E-Readers
 - Sync Kobo devices with your Calibre library
 - In-browser eBook reading support for multiple formats
 - Upload new books in various formats, including audio formats
@@ -72,6 +72,7 @@ _This software is a fork of [Calibre-Web](https://github.com/janeczku/calibre-we
 - Support for custom OIDC providers (with support for /.well-known/openid-configuration)
 - Support for manual installation (without docker specific features)
 - Amazon Japan as metadata providers
+- Added a multi email selection for the Send eBooks to E-Readers function
 
 ## Installation
 

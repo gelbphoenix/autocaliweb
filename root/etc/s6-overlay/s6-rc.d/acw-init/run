@@ -85,7 +85,7 @@ declare -a requiredDirs=("/config" "/app/autocaliweb")
 
 # Only include the library if explicitly enabled
 if [ "${ACW_CHOWN_LIBRARY:-false}" = "true" ]; then
-    requiredDirs+=("/calibre-library")
+    requiredDirs+=("${LIBRARY_DIR:-/calibre-library}")
 fi
 
 dirs=$(printf ", %s" "${requiredDirs[@]}")

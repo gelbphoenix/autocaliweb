@@ -145,7 +145,7 @@ def shutdown():
     show_text = {}
     if task in (0, 1):  # valid commandos received
         # close all database connections
-        calibre_db.dispose()
+        # calibre_db.dispose()
         ub.dispose()
 
         if task == 0:

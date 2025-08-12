@@ -686,14 +686,19 @@ make_koreader_plugin() {
         rm "$INSTALL_DIR/koreader/plugins/acwsync.koplugin/"*.digest 2>/dev/null || true
         rm "$INSTALL_DIR/koreader/plugins/koplugin.zip" 2>/dev/null || true
         cd "$INSTALL_DIR/koreader/plugins"
+        
         print_status "Calculating digest of plugin files..."
-        PLUGIN_DIGEST=$(find acwsync.koplugin -type f -exec sha256sum {} + | sha256sum | cut -d' ' -f1)
+        PLUGIN_DIGEST=$(find acwsync.koplugin -type f -name "*.lua" -o -name "*.json" | sort | xargs sha256sum | sha256sum | cut -d' ' -f1)
         print_status "Plugin digest: $PLUGIN_DIGEST"
+        
         echo "Plugin files digest: $PLUGIN_DIGEST" > acwsync.koplugin/${PLUGIN_DIGEST}.digest
         echo "Build date: $(date)" >> acwsync.koplugin/${PLUGIN_DIGEST}.digest
         echo "Files included:" >> acwsync.koplugin/${PLUGIN_DIGEST}.digest
         find acwsync.koplugin -type f -name "*.lua" -o -name "*.json" | sort >> acwsync.koplugin/${PLUGIN_DIGEST}.digest
         zip -r koplugin.zip acwsync.koplugin/
+
+        cp -r koplugin.zip "$INSTALL_DIR/cps/static/"
+        
         print_status "Created koplugin.zip from acwsync.koplugin folder with digest file: ${PLUGIN_DIGEST}.digest"
     else
         print_warning "acwsync.koplugin directory not found, skipping plugin creation"

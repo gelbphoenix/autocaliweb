@@ -27,14 +27,83 @@
 #  along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 # Hardcover api document: https://docs.hardcover.app/api/getting-started/
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 import requests
-from cps import logger, config, constants
-from cps.services.Metadata import MetaRecord, MetaSourceInfo, Metadata
-from cps.isoLanguages import get_language_name
-from ..cw_login import current_user
 from os import getenv
+
+try:
+    from cps import logger, config, constants
+    from cps.services.Metadata import MetaRecord, MetaSourceInfo, Metadata
+    from cps.isoLanguages import get_language_name
+    from ..cw_login import current_user
+except Exception as e:
+    import logging as _logging
+    from dataclasses import dataclass, field
+
+    class _FallbackLogger:
+        @staticmethod
+        def create():
+            _log = _logging.getLogger("hardcover")
+            if not _log.handlers:
+                _h = _logging.StreamHandler()
+                _h.setFormatter(_logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+                _log.addHandler(_h)
+                _log.setLevel(_logging.INFO)
+            return _log
+        
+    logger = _FallbackLogger()
+
+    class _FallbackConfig:
+        config_hardcover_api_token = Optional[str] = None
+
+    config = _FallbackConfig()
+
+    class _FallbackConstants:
+        USER_AGENT = "Autocaliweb/Hardcover-Metadata-Provider"
+        
+    constants = _FallbackConstants()
+
+    @dataclass
+    class MetaSourceInfo:
+        id: str
+        description: str
+        link: str
+
+    @dataclass
+    class MetaRecord:
+        id: Union[str, int]
+        title: str
+        authors: List[str]
+        url: str
+        source: MetaSourceInfo
+        series: str = ""
+        cover: str = ""
+        description: Optional[str] = ""
+        series: Optional[str] = ""
+        series_index: Optional[Union[int, float]] = 0
+        identifiers: Dict[str, Union[str, int]] = field(default_factory=dict)
+        publisher: Optional[str] = ""
+        publishedDate: Optional[str] = ""
+        rating: Optional[int] = 0
+        languages: Optional[List[str]] = field(default_factory=list)
+        tags: Optional[List[str]] = field(default_factory=list)
+        format: Optional[str] = None
+
+    class Metadata:
+        def __init__(self):
+            self.active = True
+
+        def set_status(self, state):
+            self.active = state
+
+    def get_language_name(locale: str, code3: str) -> str:
+        return code3 or ""
+    
+    class _DummyUser:
+        hardcover_token: Optional[str] = None
+
+    current_user = _DummyUser()
 
 log = logger.create()
 
@@ -121,7 +190,10 @@ class Hardcover(Metadata):
                     Hardcover.BASE_URL,
                     json={
                         "query":Hardcover.SEARCH_QUERY if not edition_search else Hardcover.EDITION_QUERY,
-                        "variables":{"query":query if not edition_search else query.split(":")[1]}
+                        "variables":{
+                            "query":
+                            query if not edition_search else query.split(":")[1]
+                        }
                     },
                     headers=Hardcover.HEADERS,
                 )
@@ -156,8 +228,20 @@ class Hardcover(Metadata):
                         result = books_data[0]
                         val = self._parse_edition_results(result=result, generic_cover=generic_cover, locale=locale)
                 else:
-                    search_results = self._safe_get(response_data, "data", "search", "results", "hits", default=[])
-                    for result in search_results:
+                    raw_results = self._safe_get(response_data, "data", "search", "results", "hits", default=[])
+                    
+                    try:
+                        if isinstance(raw_results, str):
+                            import json as _json
+                            parsed = _json.loads(raw_results)
+                        else:
+                            parsed = raw_results
+                    except Exception as _:
+                        parsed = []
+
+                    search_hits = self._safe_get(parsed, "hits", default=[])
+
+                    for result in search_hits:
                         match = self._parse_title_result(
                             result=result, generic_cover=generic_cover, locale=locale
                         )
@@ -245,7 +329,13 @@ class Hardcover(Metadata):
             isbn = edition.get("isbn_13",edition.get("isbn_10"))
             if isbn:
                 match.identifiers["isbn"] = isbn
-            match.format = Hardcover.FORMATS[edition.get("reading_format_id",0)]
+            
+            rf_id = edition.get("reading_format_id")
+            if isinstance(rf_id, int) and 0 <= rf_id < len(Hardcover.FORMATS):
+                match.format = Hardcover.FORMATS[rf_id]
+            else:
+                match.format = ""
+            
             editions.append(match)
         return editions
 
@@ -323,3 +413,50 @@ class Hardcover(Metadata):
             return data
         except (TypeError, KeyError):
             return default
+        
+if __name__ == "__main__":
+    import argparse
+    import json
+    from dataclasses import asdict, is_dataclass
+
+    parser = argparse.ArgumentParser(description="Hardcover Metadata Provider Test")
+    parser.add_argument("query", help="Search query for Hardcover metadata, e.g., 'hardcover-id:12345' or text")
+    parser.add_argument("--token", dest="token", help="Hardcover API token or set HARDCOVER_TOKEN environment variable")
+    parser.add_argument("--locale", default="en", help="Locale for language names (default: 'en')")
+    parser.add_argument("--cover", dest="generic_cover", default="", help="Generic cover image URL fallback")
+    args = parser.parse_args()
+
+    token = args.token or getenv("HARDCOVER_TOKEN")
+    if token:
+        try:
+            config.config_hardcover_api_token = token
+        except Exception:
+            pass
+    
+    class _DummyUser:
+        hardcover_token: None
+
+    try:
+        globals()["current_user"] = _DummyUser()
+    except Exception:
+        pass
+
+    provider = Hardcover()
+    results = provider.search(query=args.query, generic_cover=args.generic_cover, locale=args.locale) or []
+
+    def _to_dict(obj):
+        try:
+            if is_dataclass(obj):
+                return asdict(obj)
+        except Exception:
+            pass
+
+        if isinstance(obj, (list, tuple)):
+            return [_to_dict(item) for item in obj]
+        
+        if isinstance(obj, dict):
+            return {k: _to_dict(v) for k, v in obj.items()}
+        
+        return obj
+    
+    print(json.dumps([_to_dict(result) for result in results], indent=2, ensure_ascii=False))

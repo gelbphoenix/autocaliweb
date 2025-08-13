@@ -92,7 +92,6 @@ RUN mkdir -p /app/calibre && \
     CALIBRE_VERSION=${CALIBRE_RELEASE#v} && \
     curl -o /tmp/calibre.txz -L https://download.calibre-ebook.com/${CALIBRE_VERSION}/calibre-${CALIBRE_VERSION}-$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/arm64/').txz && \
     tar xf /tmp/calibre.txz -C /app/calibre && \
-    strip --remove-section=.note.ABI-tag /app/calibre/lib/libQt6* && \
     rm /tmp/calibre.txz && \
     /app/calibre/calibre_postinstall && \
     echo "$CALIBRE_RELEASE" >| /app/CALIBRE_RELEASE

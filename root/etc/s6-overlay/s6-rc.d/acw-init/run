@@ -108,3 +108,47 @@ do
         echo "[acw-init] Skipping '$d' (directory does not exist)."
     fi
 done
+
+#------------------------------------------------------------------------------------------------------------------------
+# Qt6/Kernel compatibility check and possible fix
+#------------------------------------------------------------------------------------------------------------------------
+
+MIN_KERNEL="5.4"
+HOST_KERNEL_VERSION="$(uname -r)"
+HOST_KERNEL="${HOST_KERNEL_VERSION%%-*}"
+
+version_ge() {
+    [ "$(printf '%s\n' "$2" "$1" | sort -V | head -n1)" = "$1" ];
+}
+
+if [ ! -f "$QT_SENTINEL" ]; then
+    if version_ge "$HOST_KERNEL" "$MIN_KERNEL"; then
+        echo "[acw-init] [Qt6] Kernel version is compatible with Qt6, no action needed."
+    else
+        echo "[acw-init] [Qt6] Host kernel version $HOST_KERNEL is lower than required $MIN_KERNEL, attempting legacy compatibility by stripping .note.ABI-tag..."
+
+        if command -v strip >/dev/null 2>&1; then
+            any_stripped=0
+            for f in /app/calibre/lib/libQr6*.so*; do
+                [ -f "$f" ] || continue
+                if readelf -S "$f" | grep -q '.note.ABI-tag'; then
+                    strip --remove-section=.note.ABI-tag "$f" 2>/dev/null || true
+                    any_stripped=1
+                fi
+            done
+
+            if [ $any_stripped -eq 1 ]; then
+                echo "************************************* ATTENTION *************************************"
+                echo "[acw-init] [Qt6] Stripped .note.ABI-tag from Qt6 libraries to ensure compatibility with older kernels. Features may still be limited on very old kernels. This will enable devices with kernels >= $MIN_KERNEL to run Autocaliweb however features that require Qt6 may not work as expected (e.g. working with PDF files)."
+                echo "************************************* ATTENTION *************************************"
+            else
+                echo "[acw-init] [Qt6] No ABI note sections found to strip, no action taken."
+            fi
+        else
+            echo "[acw-init] [Qt6] 'strip' command not found, cannot attempt to strip .note.ABI-tag."
+        fi
+    fi
+    touch "$QT_SENTINEL"
+else
+    echo "[acw-init] [Qt6] Qt compatibility confirmed, no action needed."
+fi

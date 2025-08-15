@@ -53,7 +53,7 @@
                         {% endif %}
                         {% if current_user.kindle_mail and entry.email_share_list %}
                             <div class="btn-group" role="group">
-                                <button id="sendToEReaderBtn" type="button" class="btn btn-primary" data-book-id="{{ entry.id }}">
+                                <button id="sendToEReaderBtn" type="button" class="btn btn-primary" data-book-id="{{ entry.id }}" data-toggle="tooltip" title="{{ _('Send to eReader') }}" data-placement="bottom" data-viewport=".btn-toolbar">
                                     <span class="glyphicon glyphicon-send"></span> {{ _('Send to eReader') }}
                                 </button>
                             </div>

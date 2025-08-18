@@ -172,6 +172,39 @@ def HandleSyncRequest():
     # also refresh thumbnails if configured
     helper.update_thumbnail_cache()
 
+    if current_user.kobo_only_shelves_sync:
+        try:
+            synced_books_query = ub.session.query(ub.KoboSyncedBooks.book_id).filter(ub.KoboSyncedBooks.user_id == current_user.id)
+            synced_books_ids = {item.book_id for item in synced_books_query}
+
+            allowed_books_query = ub.session.query(ub.BookShelf.book_id).join(ub.Shelf, ub.BookShelf.shelf_id == ub.Shelf.id).filter(ub.Shelf.user_id == current_user.id, ub.Shelf.kobo_sync == True)
+            allowed_books_ids = {item.book_id for item in allowed_books_query}
+
+            book_ids_to_delete = synced_books_ids - allowed_books_ids
+
+            if book_ids_to_delete:
+                log.info(f"Kobo Sync: Found {len(book_ids_to_delete)} books to delete from device for user {current_user.id}")
+
+                for book_id in book_ids_to_delete:
+                    book = calibre_db.get_book(book_id)
+                    if book:
+                        entitlement = {
+                            "BookEntitlement": create_book_entitlement(book, archived=True),
+                            "BookMetadata": get_metadata(book),
+                        }
+                        sync_results.append({"ChangedEntitlement": entitlement})
+
+                    if book_ids_to_delete:
+                        ub.session.query(ub.KoboSyncedBooks).filter(
+                            ub.KoboSyncedBooks.user_id == current_user.id,
+                            ub.KoboSyncedBooks.book_id.in_(book_ids_to_delete)
+                        ).delete(synchronize_session=False)
+                        ub.session.commit()
+
+        except Exception as e:
+            log.error(f"Kobo Sync: Error during deletion logic: {e}")
+            ub.session.rollback()
+
     only_kobo_shelves = current_user.kobo_only_shelves_sync
 
     if only_kobo_shelves:
@@ -1024,6 +1057,10 @@ def HandleBookDeletionRequest(book_uuid):
         return redirect_or_proxy_request()
 
     book_id = book.id
+
+    if not current_user.kobo_only_shelves_sync and current_user.check_visibility(32768):
+        kobo_sync_status.change_archived_books(book_id, True)
+
     is_archived = kobo_sync_status.change_archived_books(book_id, True)
     if is_archived:
         kobo_sync_status.remove_synced_book(book_id)

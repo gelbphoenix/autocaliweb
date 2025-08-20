@@ -201,25 +201,31 @@ def update_thumbnails():
 
 
 def acw_get_package_versions() -> tuple[str, str, str, str]:
+    install_base_dir = os.environ.get("ACW_INSTALL_DIR", "/app/")
+    acw_release_path = os.path.join(install_base_dir, "ACW_RELEASE")
+    kepubify_release_path = os.path.join(install_base_dir, "KEPUBIFY_RELEASE")
+    calibre_release_path = os.path.join(install_base_dir, "CALIBRE_RELEASE")
     try:
-        with open("/app/ACW_RELEASE", "r") as f:
+        with open(acw_release_path, "r") as f:
             acw_version = f.read()
     except Exception:
         acw_version = "Unknown"
 
     try:
-        with open("/app/KEPUBIFY_RELEASE", "r") as f:
+        with open(kepubify_release_path, "r") as f:
             kepubify_version = f.read()
     except Exception:
         kepubify_version = "Unknown"
 
     try:
-        with open("/app/CALIBRE_RELEASE", "r") as f:
+        with open(calibre_release_path, "r") as f:
             calibre_version = f.read()
     except Exception:
         calibre_version = "Unknown"
 
-    return acw_version, kepubify_version, calibre_version
+    python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+
+    return acw_version, kepubify_version, calibre_version, python_version
 
 
 @admi.route("/admin/view")
@@ -227,7 +233,7 @@ def acw_get_package_versions() -> tuple[str, str, str, str]:
 @admin_required
 def admin():
     version = updater_thread.get_current_version_info()
-    acw_version, kepubify_version, calibre_version = acw_get_package_versions()
+    acw_version, kepubify_version, calibre_version, python_version = acw_get_package_versions()
     if version is False:
         commit = _('Unknown')
     else:
@@ -253,8 +259,9 @@ def admin():
 
     return render_title_template("admin.html", allUser=all_user, config=config, commit=commit,
                                  acw_version=acw_version, kepubify_version=kepubify_version,
-                                 calibre_version=calibre_version, feature_support=feature_support, 
-                                 schedule_time=schedule_time, schedule_duration=schedule_duration,
+                                 calibre_version=calibre_version, python_version=python_version, 
+								 feature_support=feature_support, schedule_time=schedule_time, 
+								 schedule_duration=schedule_duration,
                                  title=_("Admin page"), page="admin")
 
 

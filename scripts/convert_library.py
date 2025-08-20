@@ -19,7 +19,7 @@ from acw_db import ACW_DB
 from kindle_epub_fixer import EPUBFixer
 
 ### Global Variables
-convert_library_log_file = "/config/convert-library.log"
+convert_library_log_file = os.path.join(os.environ.get("ACW_CONFIG_DIR", "/config"), "convert-library.log")
 
 # Define the logger
 logger = logging.getLogger(__name__)
@@ -34,8 +34,9 @@ file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
 # Define user and group
-USER_NAME = "abc"
-GROUP_NAME = "abc"
+USER_NAME = os.environ.get("ACW_USER", "abc")
+GROUP_NAME = os.environ.get("ACW_GROUP", "abc")
+owner_group_string = f"{USER_NAME}:{GROUP_NAME}"
 
 # Get UID and GID
 uid = pwd.getpwnam(USER_NAME).pw_uid
@@ -73,7 +74,7 @@ atexit.register(removeLock)
 
 backup_destinations = {
         entry.name: entry.path
-        for entry in os.scandir("/config/processed_books")
+        for entry in os.scandir(os.path.join(os.environ.get("ACW_CONFIG_DIR", "/config"), "processed_books"))
         if entry.is_dir()
     }
 
@@ -93,11 +94,11 @@ class LibraryConverter:
         self.hierarchy_of_success = {'epub', 'lit', 'mobi', 'azw', 'azw3', 'fb2', 'fbz', 'azw4', 'prc', 'odt', 'lrf', 'pdb',  'cbz', 'pml', 'rb', 'cbr', 'cb7', 'cbc', 'chm', 'djvu', 'snb', 'tcr', 'pdf', 'docx', 'rtf', 'html', 'htmlz', 'txtz', 'txt'}
 
         self.current_book = 1
-        self.ingest_folder, self.library_dir, self.tmp_conversion_dir = self.get_dirs('/app/autocaliweb/dirs.json') 
+        self.ingest_folder, self.library_dir, self.tmp_conversion_dir = self.get_dirs(os.path.join(os.environ.get("ACW_INSTALL_DIR", "/app/autocaliweb"), "dirs.json")) 
         self.to_convert = self.get_books_to_convert()
 
         self.calibre_env = os.environ.copy()
-        self.calibre_env["HOME"] = "/config"
+        self.calibre_env["HOME"] = os.environ.get("ACW_CONFIG_DIR", "/config")
 
         self.split_library = self.get_split_library()
         if self.split_library:
@@ -105,7 +106,7 @@ class LibraryConverter:
             self.calibre_env["CALIBRE_OVERRIDE_DATABASE_PATH"] = os.path.join(self.split_library['db_path'], 'metadata.db')
 
     def get_split_library(self) -> dict[str, str] | None:
-        con = sqlite3.connect('/config/app.db')
+        con = sqlite3.connect(os.path.join(os.environ.get("ACW_CONFIG_DIR", "/config"), "app.db"))
         cur = con.cursor()
         split_library = cur.execute("SELECT config_calibre_split FROM settings;").fetchone()[0]
 
@@ -251,9 +252,9 @@ class LibraryConverter:
 
                 print_and_log(f"[convert-library]: ({self.current_book}/{len(self.to_convert)}) Import of {os.path.basename(target_filepath)} successfully completed!")
             except subprocess.CalledProcessError as e:
-                print_and_log(f"[convert-library]: ({self.current_book}/{len(self.to_convert)}) Import of {os.path.basename(target_filepath)} was not successfully completed. Converted file moved to /config/processed_books/failed/{os.path.basename(target_filepath)}. See the following error:\n{e}")
+                print_and_log(f"[convert-library]: ({self.current_book}/{len(self.to_convert)}) Import of {os.path.basename(target_filepath)} was not successfully completed. Converted file moved to {os.path.join(os.environ.get('ACW_CONFIG_DIR', '/config'), 'processed_books', 'failed', os.path.basename(target_filepath))}. See the following error:\n{e}")
                 try:
-                    output_path = f"/config/processed_books/failed/{os.path.basename(target_filepath)}"
+                    output_path = os.path.join(os.environ.get('ACW_CONFIG_DIR', '/config'), 'processed_books', 'failed', os.path.basename(target_filepath))
                     shutil.move(target_filepath, output_path)
                 except Exception as e:
                     print_and_log(f"[convert-library]: ERROR - The following error occurred when trying to copy {file} to {output_path}:\n{e}")
@@ -348,10 +349,10 @@ class LibraryConverter:
 
     def set_library_permissions(self):
         try:
-            subprocess.run(["chown", "-R", "abc:abc", self.library_dir], check=True)
-            print_and_log(f"[convert-library]: ({self.current_book}/{len(self.to_convert)}) Successfully set ownership of new files in {self.library_dir} to abc:abc.")
+            subprocess.run(["chown", "-R", owner_group_string, self.library_dir], check=True)
+            print_and_log(f"[convert-library]: ({self.current_book}/{len(self.to_convert)}) Successfully set ownership of new files in {self.library_dir} to owner_group_string.")
         except subprocess.CalledProcessError as e:
-            print_and_log(f"[convert-library]: ({self.current_book}/{len(self.to_convert)}) An error occurred while attempting to recursively set ownership of {self.library_dir} to abc:abc. See the following error:\n{e}")
+            print_and_log(f"[convert-library]: ({self.current_book}/{len(self.to_convert)}) An error occurred while attempting to recursively set ownership of {self.library_dir} to owner_group_string. See the following error:\n{e}")
 
 
 def main():

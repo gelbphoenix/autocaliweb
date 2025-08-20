@@ -403,7 +403,8 @@ def get_sort_function(sort_param, data):
 
 def acw_get_library_location() -> str:
     dirs = {}
-    with open('/app/autocaliweb/dirs.json', 'r') as f:
+    DIRS_JSON = os.path.join(os.environ.get("ACW_INSTALL_DIR", "/app/autocaliweb"), "dirs.json")
+    with open(DIRS_JSON, 'r') as f:
         dirs: dict[str, str] = json.load(f)
     library_dir = f"{dirs['calibre_library_dir']}/"
     return library_dir

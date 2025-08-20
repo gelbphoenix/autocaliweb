@@ -436,6 +436,11 @@ if setting_value %}<span class="glyphicon glyphicon-ok"></span>{% else %}<span
               <td>{{kepubify_version}}</td>
               <td><i>{{_('-')}}</i></td>
             </tr>
+            <tr id="current_version">
+              <td>Python</td>
+              <td>{{python_version}}</td>
+              <td><i>{{_('-')}}</i></td>
+            </tr>
           </tbody>
         </table>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />

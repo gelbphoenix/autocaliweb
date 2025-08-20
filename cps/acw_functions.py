@@ -24,7 +24,10 @@ from werkzeug.utils import secure_filename
 from .web import acw_get_num_books_in_library
 
 import sys
-sys.path.insert(1, '/app/autocaliweb/scripts/')
+INSTALL_BASE_DIR = os.environ.get("ACW_INSTALL_DIR", "/app/autocaliweb")
+CONFIG_BASE_DIR = os.environ.get("ACW_CONFIG_DIR", "/config")
+SCRIPTS_PATH = os.path.join(INSTALL_BASE_DIR, "scripts")
+sys.path.insert(1, SCRIPTS_PATH)
 from acw_db import ACW_DB
 
 switch_theme = Blueprint('switch_theme', __name__)
@@ -39,8 +42,8 @@ acw_logs = Blueprint('acw_logs', __name__)
 ##——————————————————————————————GLOBAL VARIABLES——————————————————————————————##
 
 # Folder where the log files are stored
-LOG_ARCHIVE = "/config/log_archive"
-DIRS_JSON = "/app/autocaliweb/dirs.json"
+LOG_ARCHIVE = os.path.join(CONFIG_BASE_DIR, "log_archive")
+DIRS_JSON = os.path.join(INSTALL_BASE_DIR, "dirs.json")
 
 ##———————————————————————————END OF GLOBAL VARIABLES——————————————————————————##
 
@@ -53,7 +56,7 @@ DIRS_JSON = "/app/autocaliweb/dirs.json"
 @switch_theme.route("/acw-switch-theme", methods=["GET", "POST"])
 @login_required_if_no_ano
 def acw_switch_theme():
-    con = sqlite3.connect("/config/app.db")
+    con = sqlite3.connect(os.path.join(CONFIG_BASE_DIR, "app.db"))
     cur = con.cursor()
     current_theme = cur.execute('SELECT config_theme FROM settings;').fetchone()[0]
 
@@ -89,7 +92,7 @@ def get_ingest_dir():
 def refresh_library(app):
     with app.app_context():  # Create app context for session
         ingest_dir = get_ingest_dir()
-        result = subprocess.run(['python3', '/app/autocaliweb/scripts/ingest_processor.py', ingest_dir])
+        result = subprocess.run(['python3', os.path.join(SCRIPTS_PATH, 'ingest_processor.py'), ingest_dir])
         return_code = result.returncode
 
         # Add empty list for messages in app context if a list doesn't already exist
@@ -212,7 +215,7 @@ def set_acw_settings():
                 result['auto_ingest_ignored_formats'].remove(result['auto_convert_target_format'])
 
             # DEBUGGING
-            # with open("/config/post_request" ,"w") as f:
+            # with open(os.path.join(CONFIG_BASE_DIR, "post_request") ,"w") as f:
             #     for key in result.keys():
             #         if key == "auto_convert_ignored_formats" or key == "auto_ingest_ignored_formats":
             #             f.write(f"{key} - {', '.join(result[key])}\n")
@@ -353,7 +356,7 @@ def show_full_epub_fixer_with_paths_fixes():
 @login_required_if_no_ano
 @admin_required
 def acw_flash_status():
-    result = subprocess.run(['/app/autocaliweb/scripts/check-acw-services.sh'])
+    result = subprocess.run([os.path.join(SCRIPTS_PATH, 'check-acw-services.sh')])
     services_status = result.returncode
 
     match services_status:
@@ -475,11 +478,11 @@ def get_log_dates(logs) -> dict[str,str]:
 ##———————————————————END OF SHARED VARIABLES & FUNCTIONS———————————————————————##
 
 def convert_library_start(queue):
-    cl_process = subprocess.Popen(['python3', '/app/autocaliweb/scripts/convert_library.py'])
+    cl_process = subprocess.Popen(['python3', os.path.join(SCRIPTS_PATH, 'convert_library.py')])
     queue.put(cl_process)
 
 def get_tmp_conversion_dir() -> str:
-    dirs_json_path = "/app/autocaliweb/dirs.json"
+    dirs_json_path = DIRS_JSON
     dirs = {}
     with open(dirs_json_path, 'r') as f:
         dirs: dict[str, str] = json.load(f)
@@ -498,7 +501,7 @@ def empty_tmp_con_dir(tmp_conversion_dir) -> None:
         print(f"[acw-functions]: An error occurred while emptying {tmp_conversion_dir}. See the following error: {e}")
 
 def is_convert_library_finished() -> bool:
-    log_path = "/config/convert-library.log"
+    log_path = os.path.join(CONFIG_BASE_DIR, "convert-library.log")
     with open(log_path, 'r') as log:
         if "ACW Convert Library Service - Run Ended: " in log.read():
             return True
@@ -507,7 +510,7 @@ def is_convert_library_finished() -> bool:
 
 def kill_convert_library(queue):
     trigger_file = Path(tempfile.gettempdir() + "/.kill_convert_library_trigger")
-    log_path = "/config/convert-library.log"
+    log_path = os.path.join(CONFIG_BASE_DIR, "convert-library.log")
     while True:
         sleep(0.05) # Required to prevent high cpu usage
         if trigger_file.exists():
@@ -551,7 +554,7 @@ def show_convert_library_logs():
 @convert_library.route('/acw-convert-library/download-current-log/<log_filename>')
 def download_current_log(log_filename):
     log_filename = "convert-library.log"
-    LOG_DIR = "/config"
+    LOG_DIR = CONFIG_BASE_DIR
     try:
         # Secure the filename to prevent directory traversal (e.g., '..')
         safe_filename = secure_filename(log_filename)
@@ -577,7 +580,7 @@ def download_current_log(log_filename):
 @convert_library.route('/acw-convert-library-start', methods=["GET"])
 def start_conversion():
     # Wipe conversion log from previous runs
-    open('/config/convert-library.log', 'w').close()
+    open(os.path.join(CONFIG_BASE_DIR, "convert-library.log"), 'w').close()
     # Remove any left over kill file
     try:
         os.remove(tempfile.gettempdir() + "/.kill_convert_library_trigger")
@@ -601,7 +604,7 @@ def cancel_convert_library():
 
 @convert_library.route('/convert-library-status', methods=["GET"])
 def get_status():
-    with open("/config/convert-library.log", 'r') as f:
+    with open(os.path.join(CONFIG_BASE_DIR, "convert-library.log"), 'r') as f:
         status = f.read()
     progress = extract_progress(status)
     statusList = {'status':status,
@@ -616,11 +619,11 @@ def get_status():
 ##————————————————————————————————————————————————————————————————————————————##
 
 def epub_fixer_start(queue):
-    ef_process = subprocess.Popen(['python3', '/app/autocaliweb/scripts/kindle_epub_fixer.py', '--all'])
+    ef_process = subprocess.Popen(['python3', os.path.join(SCRIPTS_PATH, 'kindle_epub_fixer.py'), '--all'])
     queue.put(ef_process)
 
 def is_epub_fixer_finished() -> bool:
-    log_path = "/config/epub-fixer.log"
+    log_path = os.path.join(CONFIG_BASE_DIR, "epub-fixer.log")
     with open(log_path, 'r') as log:
         if "ACW Kindle EPUB Fixer Service - Run Ended: " in log.read():
             return True
@@ -629,7 +632,7 @@ def is_epub_fixer_finished() -> bool:
 
 def kill_epub_fixer(queue):
     trigger_file = Path(tempfile.gettempdir() + "/.kill_epub_fixer_trigger")
-    log_path = "/config/epub-fixer.log"
+    log_path = os.path.join(CONFIG_BASE_DIR, "epub-fixer.log")
     while True:
         sleep(0.05) # Required to prevent high cpu usage
         if trigger_file.exists():
@@ -670,7 +673,7 @@ def show_epub_fixer_logs():
 @epub_fixer.route('/acw-epub-fixer/download-current-log/<log_filename>')
 def download_current_log(log_filename):
     log_filename = "epub-fixer.log"
-    LOG_DIR = "/config"
+    LOG_DIR = CONFIG_BASE_DIR
     try:
         # Secure the filename to prevent directory traversal (e.g., '..')
         safe_filename = secure_filename(log_filename)
@@ -696,7 +699,7 @@ def download_current_log(log_filename):
 @epub_fixer.route('/acw-epub-fixer-start', methods=["GET"])
 def start_epub_fixer():
     # Wipe conversion log from previous runs
-    open('/config/epub-fixer.log', 'w').close()
+    open(os.path.join(CONFIG_BASE_DIR, 'epub-fixer.log'), 'w').close()
     # Remove any left over kill file
     try:
         os.remove(tempfile.gettempdir() + "/.kill_epub_fixer_trigger")
@@ -720,7 +723,7 @@ def cancel_epub_fixer():
 
 @epub_fixer.route('/epub-fixer-status', methods=["GET"])
 def get_status():
-    with open("/config/epub-fixer.log", 'r') as f:
+    with open(os.path.join(CONFIG_BASE_DIR, "epub-fixer.log"), 'r') as f:
         status = f.read()
     progress = extract_progress(status)
     statusList = {'status':status,

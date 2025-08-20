@@ -201,7 +201,7 @@ def update_thumbnails():
 
 
 def acw_get_package_versions() -> tuple[str, str, str, str]:
-    install_base_dir = os.environ.get("ACW_INSTALL_DIR", "/app/")
+    install_base_dir = os.environ.get("ACW_INSTALL_DIR", "/app")
     acw_release_path = os.path.join(install_base_dir, "ACW_RELEASE")
     kepubify_release_path = os.path.join(install_base_dir, "KEPUBIFY_RELEASE")
     calibre_release_path = os.path.join(install_base_dir, "CALIBRE_RELEASE")

@@ -117,6 +117,10 @@ class HardcoverClient:
             # Book doesn't exist, add it in Reading status
             if not book: 
                 book = self.add_book(ids, status=2)
+            # Edge case: if book doesn't exist and add_book failed to add it
+            if book is None:
+                print(f"Warning: Could not find book with identifiers {ids} for progress update. Skipping.")
+            return # Exit early if the book object is None
             # Book is either WTR or Read, and we aren't finished reading
             if book.get("status_id") != 2 and progress_percent != 100: 
                 book = self.change_book_status(book, 2)

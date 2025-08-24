@@ -71,7 +71,7 @@ _This software is a fork of [Calibre-Web](https://github.com/janeczku/calibre-we
 - User en- or disabling of the Kobo Sync and/or Overdrive tabs when using Kobo sync
 - Support for custom OIDC providers (with support for /.well-known/openid-configuration)
 - Support for manual installation (without docker specific features)
-- Amazon Japan as metadata providers
+- Amazon Japan as metadata provider
 - Added a multi email selection for the Send eBooks to E-Readers function
 
 ## Installation

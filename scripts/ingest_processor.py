@@ -35,7 +35,7 @@ atexit.register(removeLock)
 # Generates dictionary of available backup directories and their paths
 backup_destinations = {
         entry.name: entry.path
-        for entry in os.scandir("/config/processed_books")
+        for entry in os.scandir(os.path.join(os.environ.get("ACW_CONFIG_DIR", "/config"), "processed_books"))
         if entry.is_dir()
     }
 
@@ -69,6 +69,9 @@ class NewBookProcessor:
     def __init__(self, filepath: str):
         self.db = ACW_DB()
         self.acw_settings = self.db.acw_settings
+        USER_NAME = os.environ.get("ACW_USER", "abc")
+        GROUP_NAME = os.environ.get("ACW_GROUP", "abc")
+        owner_group_string = f"{USER_NAME}:{GROUP_NAME}"
 
         self.auto_convert_on = self.acw_settings['auto_convert']
         self.target_format = self.acw_settings['auto_convert_target_format']
@@ -84,7 +87,7 @@ class NewBookProcessor:
         self.supported_book_formats = {'azw', 'azw3', 'azw4', 'cbz', 'cbr', 'cb7', 'cbc', 'chm', 'djvu', 'docx', 'epub', 'fb2', 'fbz', 'html', 'htmlz', 'lit', 'lrf', 'mobi', 'odt', 'pdf', 'prc', 'pdb', 'pml', 'rb', 'rtf', 'snb', 'tcr', 'txtz', 'txt', 'kepub'}
         self.hierarchy_of_success = {'epub', 'lit', 'mobi', 'azw', 'epub', 'azw3', 'fb2', 'fbz', 'azw4',  'prc', 'odt', 'lrf', 'pdb',  'cbz', 'pml', 'rb', 'cbr', 'cb7', 'cbc', 'chm', 'djvu', 'snb', 'tcr', 'pdf', 'docx', 'rtf', 'html', 'htmlz', 'txtz', 'txt'}
         self.supported_audiobook_formats = {'m4a', 'm4b', 'mp4'}
-        self.ingest_folder, self.library_dir, self.tmp_conversion_dir = self.get_dirs("/app/autocaliweb/dirs.json")
+        self.ingest_folder, self.library_dir, self.tmp_conversion_dir = self.get_dirs(os.path.join(os.environ.get("ACW_INSTALL_DIR", "/app/autocaliweb"), "dirs.json"))
 
         # Create the tmp_conversion_dir if it does not already exist
         Path(self.tmp_conversion_dir).mkdir(exist_ok=True)
@@ -95,7 +98,7 @@ class NewBookProcessor:
         self.can_convert, self.input_format = self.can_convert_check()
 
         self.calibre_env = os.environ.copy()
-        self.calibre_env['HOME'] = "/config"
+        self.calibre_env['HOME'] = os.environ.get("ACW_CONFIG_DIR", "/config")
 
         self.split_library = self.get_split_library()
         if self.split_library:
@@ -103,7 +106,7 @@ class NewBookProcessor:
             self.calibre_env["CALIBRE_OVERRIDE_DATABASE_PATH"] = os.path.join(self.split_library['db_path'], 'metadata.db')
 
     def get_split_library(self) -> dict[str, str] | None:
-        con = sqlite3.connect(f"/config/app.db")
+        con = sqlite3.connect(os.path.join(os.environ.get("ACW_CONFIG_DIR", "/config"), "app.db"))
         cur = con.cursor()
         split_library = cur.execute("SELECT config_calibre_split FROM settings;").fetchone()[0]
 
@@ -151,7 +154,7 @@ class NewBookProcessor:
         try:
             output_path = backup_destinations[backup_type]
         except Exception as e:
-            print(f"[ingest-processor] The following error occurred when trying to fetch the available backup dirs in /config/processed_books:\n{e}")
+            print(f"[ingest-processor] The following error occurred when trying to fetch the available backup dirs in {os.path.join(os.environ.get('ACW_CONFIG_DIR', '/config'), 'processed_books')}:\n{e}")
         try:
             shutil.copy2(input_file, output_path)
         except Exception as e:
@@ -320,9 +323,9 @@ class NewBookProcessor:
 
     def set_library_permissions(self):
         try:
-            subprocess.run(["chown", "-R", "abc:abc", self.library_dir], check=True)
+            subprocess.run(["chown", "-R", owner_group_string, self.library_dir], check=True)
         except subprocess.CalledProcessError as e:
-            print(f"[ingest-processor] An error occurred while attempting to recursively set ownership of {self.library_dir} to abc:abc. See the following error:\n{e}", flush=True)
+            print(f"[ingest-processor] An error occurred while attempting to recursively set ownership of {self.library_dir} to owner_group_string. See the following error:\n{e}", flush=True)
 
 
 def main(filepath=sys.argv[1]):

@@ -22,11 +22,13 @@ from acw_db import ACW_DB
 ### Translated from Javascript to Python & modified by crocodilestick
 
 ### Global Variables
-dirs_json = "/app/autocaliweb/dirs.json"
-change_logs_dir = "/app/autocaliweb/metadata_change_logs"
-metadata_temp_dir = "/app/autocaliweb/metadata_temp"
+install_dir = os.environ.get("ACW_INSTALL_DIR", "/app/autocaliweb")
+dirs_json = os.path.join(install_dir, "dirs.json")
+change_logs_dir = os.path.join(install_dir, "metadata_change_logs")
+metadata_temp_dir = os.path.join(install_dir, "metadata_temp")
 # Log file path
-epub_fixer_log_file = "/config/epub-fixer.log"
+config_dir = os.environ.get("ACW_CONFIG_DIR", "/config")
+epub_fixer_log_file = os.path.join(config_dir, "epub-fixer.log")
 
 ### LOGGING
 # Define the logger
@@ -42,8 +44,8 @@ file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
 # Define user and group
-USER_NAME = "abc"
-GROUP_NAME = "abc"
+USER_NAME = os.environ.get("ACW_USER", "abc")
+GROUP_NAME = os.environ.get("ACW_GROUP", "abc")
 
 # Get UID and GID
 uid = pwd.getpwnam(USER_NAME).pw_uid
@@ -99,7 +101,7 @@ class EPUBFixer:
         """Backup original file"""
         if self.acw_settings['auto_backup_epub_fixes']:
             try:
-                output_path = f"/config/processed_books/fixed_originals/"
+                output_path = os.path.join(os.environ.get("ACW_CONFIG_DIR", "/config"), "processed_books", "fixed_originals")
                 shutil.copy2(epub_path, output_path)
             except Exception as e:
                 print_and_log(f"[acw-kindle-epub-fixer] ERROR - Error occurred when backing up {epub_path} to {output_path}:\n{e}", log=self.manually_triggered)

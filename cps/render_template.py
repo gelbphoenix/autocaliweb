@@ -28,10 +28,12 @@ from .ub import User
 # CWA specific imports
 import requests
 from datetime import datetime
-import os.path
+import os
 
 import sys
-sys.path.insert(1, '/app/autocaliweb/scripts/')
+INSTALL_BASE_DIR = os.environ.get("ACW_INSTALL_DIR", "/app/autocaliweb")
+SCRIPTS_PATH = os.path.join(INSTALL_BASE_DIR, "scripts")
+sys.path.insert(1, SCRIPTS_PATH)
 from acw_db import ACW_DB
 
 
@@ -122,7 +124,7 @@ def get_sidebar_config(kwargs=None):
 # Checks if an update for CWA is available, returning True if yes
 def acw_update_available() -> tuple[bool, str, str]:
     try:
-        with open("/app/ACW_RELEASE", 'r') as f:
+        with open(os.path.join(os.environ.get("ACW_INSTALL_DIR", "/app"), "ACW_RELEASE"), 'r') as f:
             current_version = f.read().strip()
         response = requests.get("https://api.github.com/repos/gelbphoenix/autocaliweb/releases/latest")
         tag_name = response.json().get('tag_name', current_version)
@@ -134,12 +136,12 @@ def acw_update_available() -> tuple[bool, str, str]:
 # Gets the date the last cwa update notification was displayed
 def get_acw_last_notification() -> str:
     current_date = datetime.now().strftime("%Y-%m-%d")
-    if not os.path.isfile('/app/acw_update_notice'):
-        with open('/app/acw_update_notice', 'w') as f:
+    if not os.path.isfile(os.path.join(os.environ.get("ACW_INSTALL_DIR", "/app"), "acw_update_notice")):
+        with open(os.path.join(os.environ.get("ACW_INSTALL_DIR", "/app"), "acw_update_notice"), 'w') as f:
             f.write(current_date)
         return "0001-01-01"
     else:
-        with open('/app/acw_update_notice', 'r') as f:
+        with open(os.path.join(os.environ.get("ACW_INSTALL_DIR", "/app"), "acw_update_notice"), 'r') as f:
             last_notification = f.read()
     return last_notification
 
@@ -160,7 +162,7 @@ def acw_update_notification() -> None:
             flash(_(message), category="acw_update")
             print(f"[acw-update-notification-service] {message}", flush=True)
 
-        with open('/app/acw_update_notice', 'w') as f:
+        with open(os.path.join(os.environ.get("ACW_INSTALL_DIR", "/app"), "acw_update_notice"), 'w') as f:
             f.write(current_date)
         return
     else:

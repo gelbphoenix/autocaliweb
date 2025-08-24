@@ -14,9 +14,10 @@ from pathlib import Path
 from acw_db import ACW_DB
 
 # Global Variables
-dirs_json = "/app/autocaliweb/dirs.json"
-change_logs_dir = "/app/autocaliweb/metadata_change_logs"
-metadata_temp_dir = "/app/autocaliweb/metadata_temp"
+install_dir = os.environ.get("ACW_INSTALL_DIR", "/app/autocaliweb")
+dirs_json = os.path.join(install_dir, "dirs.json")
+change_logs_dir = os.path.join(install_dir, "metadata_change_logs")
+metadata_temp_dir = os.path.join(install_dir, "metadata_temp")
 
 
 # Creates a lock file unless one already exists meaning an instance of the script is
@@ -55,7 +56,7 @@ class Book:
         )
 
         self.calibre_env = os.environ.copy()
-        self.calibre_env["HOME"] = "/config"
+        self.calibre_env["HOME"] = os.environ.get("ACW_CONFIG_DIR", "/config")
 
         self.split_library = self.get_split_library()
         if self.split_library:
@@ -71,7 +72,9 @@ class Book:
         self.log_info = None
 
     def get_split_library(self) -> dict[str, str] | None:
-        con = sqlite3.connect("/config/app.db")
+        config_dir = os.environ.get("ACW_CONFIG_DIR", "/config")
+        app_db_file = os.path.join(config_dir, "app.db")
+        con = sqlite3.connect(app_db_file)
         cur = con.cursor()
         split_library = cur.execute(
             "SELECT config_calibre_split FROM settings;"
@@ -157,7 +160,7 @@ class Enforcer:
         self.args = args
         self.calibre_library = self.get_calibre_library()
         self.calibre_env = os.environ.copy()
-        self.calibre_env["HOME"] = "/config"
+        self.calibre_env["HOME"] = os.environ.get("ACW_CONFIG_DIR", "/config")
 
         self.illegal_characters = ["<", ">", ":", '"', "/", "\\", "|", "?", "*"]
 

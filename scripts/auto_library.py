@@ -3,6 +3,7 @@ import os
 import shutil
 import sqlite3
 import sys
+import subprocess
 
 
 def main():
@@ -20,13 +21,15 @@ def main():
 
 class AutoLibrary:
     def __init__(self):
-        self.config_dir = "/config"
+        self.config_dir = os.environ.get("ACW_CONFIG_DIR", "/config")
         self.library_dir = os.environ.get("LIBRARY_DIR", "/calibre-library")
-        self.dirs_path = "/app/autocaliweb/dirs.json"
-        self.app_db = "/config/app.db"
-
-        self.empty_appdb = "/app/autocaliweb/library/app.db"
-        self.empty_metadb = "/app/autocaliweb/library/metadata.db"
+        self.install_dir = os.environ.get("ACW_INSTALL_DIR", "/app/autocaliweb")
+        self.dirs_path = os.path.join(self.install_dir, "dirs.json")
+        self.app_db = os.path.join(self.config_dir, "app.db")
+        self.acw_user = os.environ.get("ACW_USER", "abc")
+        self.acw_group = os.environ.get("ACW_GROUP", "abc")
+        self.empty_appdb = os.path.join(self.install_dir, "library", "app.db")
+        self.empty_metadb = os.path.join(self.install_dir, "library", "metadata.db")
 
         self.metadb_path = None
         self.lib_path = None
@@ -51,7 +54,13 @@ class AutoLibrary:
         if len(db_files) == 0:
             print(f"[acw-auto-library] No app.db found in {self.config_dir}, copying from /app/autocaliweb/empty_library/app.db")
             shutil.copyfile(self.empty_appdb, f"{self.config_dir}/app.db")
-            os.system(f"chown -R abc:abc {self.config_dir}")
+        owner_group_string = f"{self.acw_user}:{self.acw_group}"
+        try:
+            subprocess.run(["chown", "-R", owner_group_string, self.config_dir], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error running chown command: {e}")
+        except FileNotFoundError:
+            print("Error: 'chown' command not found. Ensure it's in your system's PATH.")
             print(f"[acw-auto-library] app.db successfully copied to {self.config_dir}")
         else:
             return
@@ -127,7 +136,13 @@ class AutoLibrary:
     def make_new_library(self):
         print("[acw-auto-library] No existing library found. Creating new library...")
         shutil.copyfile(self.empty_metadb, f"{self.library_dir}/metadata.db")
-        os.system(f"chown -R abc:abc {self.library_dir}")
+        owner_group_string = f"{self.acw_user}:{self.acw_group}"
+        try:
+            subprocess.run(["chown", "-R", owner_group_string, self.library_dir], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error running chown command: {e}")
+        except FileNotFoundError:
+            print("Error: 'chown' command not found. Ensure it's in your system's PATH.")
         self.metadb_path = f"{self.library_dir}/metadata.db"
         return
 

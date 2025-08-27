@@ -1,10 +1,10 @@
-# Autocaliweb
+# ![Logo Light](https://github.com/gelbphoenix/autocaliweb/raw/refs/heads/master/cps/static/icon-light.svg) Autocaliweb
 
 Autocaliweb is a web app that offers a clean and intuitive interface for browsing, reading, and downloading eBooks using a valid [Calibre](https://calibre-ebook.com) database.
 
 [![License](https://img.shields.io/github/license/gelbphoenix/autocaliweb?style=flat-square)](https://github.com/gelbphoenix/autocaliweb/blob/master/LICENSE)
-![Version](https://img.shields.io/github/v/release/gelbphoenix/autocaliweb?display_name=release&style=flat-square&logo=github&color=%23008000)
-![Commit Activity](https://img.shields.io/github/commit-activity/w/gelbphoenix/autocaliweb?logo=github&style=flat-square&label=commits)
+[![Release](https://img.shields.io/github/v/release/gelbphoenix/autocaliweb?display_name=release&style=flat-square&logo=github&color=%23008000)](https://github.com/gelbphoenix/autocaliweb/releases/latest/)
+[![Commit Activity](https://img.shields.io/github/commit-activity/w/gelbphoenix/autocaliweb?logo=github&style=flat-square&label=commits)](https://github.com/gelbphoenix/autocaliweb/commits/)
 [![Docker Pulls](https://img.shields.io/docker/pulls/gelbphoenix/autocaliweb?style=flat-square&logo=docker)](https://hub.docker.com/r/gelbphoenix/autocaliweb)
 
 <details>

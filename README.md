@@ -57,7 +57,7 @@ _This software is a fork of [Calibre-Web](https://github.com/janeczku/calibre-we
 - Server Stats tracking
 - Easy theme switching
 - Batch edits of books
-- ISBNDB and Hardcover as additional providers for metadata
+- ISBNDB, Amazon JP and Hardcover as additional metadata providers
 - Syncing reading process to [Hardcover.app](https://hardcover.app/) (Only with Kobo E-Readers)
 - Split library support
 - Support for CLI compatible Calibre plugins
@@ -71,8 +71,9 @@ _This software is a fork of [Calibre-Web](https://github.com/janeczku/calibre-we
 - User en- or disabling of the Kobo Sync and/or Overdrive tabs when using Kobo sync
 - Support for custom OIDC providers (with support for /.well-known/openid-configuration)
 - Support for manual installation (without docker specific features)
-- Amazon Japan as metadata provider
-- Added a multi email selection for the Send eBooks to E-Readers function
+- LitRes as metadata provider
+- Multi email selection for the Send eBooks to E-Readers function
+- Management system for duplicate books
 
 ## Installation
 

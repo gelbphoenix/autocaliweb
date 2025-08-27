@@ -425,7 +425,7 @@ class Updater(threading.Thread):
         tz = datetime.timedelta(seconds=time.timezone if (time.localtime().tm_isdst == 0) else time.altzone)
         if request_method == "GET":
             repository_url = _REPOSITORY_API_URL
-            status, commit = self._load_remote_data(repository_url + '/git/refs/heads/master')
+            status, commit = self._load_remote_data(repository_url + '/git/refs/heads/main')
             parents = []
             if status['message'] != '':
                 return json.dumps(status)
@@ -600,7 +600,7 @@ class Updater(threading.Thread):
     def _get_request_path(self):
         if self.config.config_updatechannel == constants.UPDATE_STABLE:
             return self.updateFile
-        return _REPOSITORY_API_URL + '/zipball/master'
+        return _REPOSITORY_API_URL + '/zipball/main'
 
     def _load_remote_data(self, repository_url):
         status = {

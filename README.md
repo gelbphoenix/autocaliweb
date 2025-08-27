@@ -1,8 +1,8 @@
-# ![Logo Light](https://github.com/gelbphoenix/autocaliweb/raw/refs/heads/master/cps/static/icon-light.svg) Autocaliweb
+# ![Logo Light](https://github.com/gelbphoenix/autocaliweb/raw/refs/heads/main/cps/static/icon-light.svg) Autocaliweb
 
 Autocaliweb is a web app that offers a clean and intuitive interface for browsing, reading, and downloading eBooks using a valid [Calibre](https://calibre-ebook.com) database.
 
-[![License](https://img.shields.io/github/license/gelbphoenix/autocaliweb?style=flat-square)](https://github.com/gelbphoenix/autocaliweb/blob/master/LICENSE)
+[![License](https://img.shields.io/github/license/gelbphoenix/autocaliweb?style=flat-square)](https://github.com/gelbphoenix/autocaliweb/blob/main/LICENSE)
 [![Release](https://img.shields.io/github/v/release/gelbphoenix/autocaliweb?display_name=release&style=flat-square&logo=github&color=%23008000)](https://github.com/gelbphoenix/autocaliweb/releases/latest/)
 [![Commit Activity](https://img.shields.io/github/commit-activity/w/gelbphoenix/autocaliweb?logo=github&style=flat-square&label=commits)](https://github.com/gelbphoenix/autocaliweb/commits/)
 [![Docker Pulls](https://img.shields.io/docker/pulls/gelbphoenix/autocaliweb?style=flat-square&logo=docker)](https://hub.docker.com/r/gelbphoenix/autocaliweb)
@@ -84,7 +84,7 @@ _This software is a fork of [Calibre-Web](https://github.com/janeczku/calibre-we
 1. Download the Docker Compose template file to the folder where Autocaliweb should have it's data (e.g. /opt/autocaliweb) using the command below:
 
 ```
-curl -Lo ./docker-compose.yml https://raw.githubusercontent.com/gelbphoenix/autocaliweb/master/docker-compose.yml
+curl -Lo ./docker-compose.yml https://raw.githubusercontent.com/gelbphoenix/autocaliweb/main/docker-compose.yml
 ```
 
 2.  Edit the compose file using the comments to help, filling in your Timezone and desired binds
@@ -126,7 +126,7 @@ If you want to install Autocaliweb on your server without setting up Docker and 
 1. Download the `manual_install_acw.sh` file with the following command and check it:
 
 ```bash
-curl -Lo ./manual_install_acw.sh https://github.com/gelbphoenix/autocaliweb/raw/refs/heads/master/scripts/manual_install_acw.sh
+curl -Lo ./manual_install_acw.sh https://github.com/gelbphoenix/autocaliweb/raw/refs/heads/main/scripts/manual_install_acw.sh
 ```
 
 2. Make `manual_install_acw.sh` executeable and run it as root:
@@ -185,7 +185,7 @@ Autocaliweb has an **not finished** documentation in the [wiki of this repositor
 
 ## Contributing to Autocaliweb
 
-To contribute, please check our [Contributing Guidelines](https://github.com/gelbphoenix/autocaliweb/blob/master/CONTRIBUTING.md). We welcome issues, feature requests, and pull requests from the community.
+To contribute, please check our [Contributing Guidelines](https://github.com/gelbphoenix/autocaliweb/blob/main/CONTRIBUTING.md). We welcome issues, feature requests, and pull requests from the community.
 
 ### Reporting Bugs
 

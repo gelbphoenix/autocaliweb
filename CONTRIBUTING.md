@@ -22,7 +22,7 @@ The documentation is not finished at this time but can be found [here](https://g
 
 ### **Reporting a bug**
 
-For **security vulnerability** in Autocaliweb look at the [SECURITY file](https://github.com/gelbphoenix/autocaliweb/blob/master/SECURITY.md) for how to repose those.
+For **security vulnerability** in Autocaliweb look at the [SECURITY file](https://github.com/gelbphoenix/autocaliweb/blob/main/SECURITY.md) for how to repose those.
 
 Ensure the **bug was not already reported** by searching on GitHub under [Issues](https://github.com/gelbphoenix/autocaliweb/issues).
 

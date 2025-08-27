@@ -3,11 +3,11 @@ name: Bug/Problem report
 about: Create a report to help us improve Autocaliweb
 title: "[BUG] ..."
 labels: ["bug", "triage"]
-projects: "gelbphoenix/2"
+projects: ["gelbphoenix/2"]
 assignees: ""
 ---
 
-Please also have a look at our [Contributing Guidelines](https://github.com/gelbphoenix/autocaliweb/blob/master/CONTRIBUTING.md)
+Please also have a look at our [Contributing Guidelines](https://github.com/gelbphoenix/autocaliweb/blob/main/CONTRIBUTING.md)
 
 **Describe the bug/problem**
 

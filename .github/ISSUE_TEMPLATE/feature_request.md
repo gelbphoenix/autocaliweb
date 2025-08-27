@@ -3,11 +3,11 @@ name: Feature request
 about: Suggest an idea for Autocaliweb
 title: "[FEATURE] ..."
 labels: ["enhancement"]
-projects: "gelbphoenix/2"
+projects: ["gelbphoenix/2"]
 assignees: ""
 ---
 
-Please have a look at our [Contributing Guidelines](https://github.com/gelbphoeni/autocaliweb/blob/master/CONTRIBUTING.md)
+Please have a look at our [Contributing Guidelines](https://github.com/gelbphoeni/autocaliweb/blob/main/CONTRIBUTING.md)
 
 **Is your feature request related to a problem? Please describe.**
 A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]

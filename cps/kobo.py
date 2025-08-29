@@ -645,11 +645,11 @@ def HandleTagUpdate(tag_id):
     shelf = ub.session.query(ub.Shelf).filter(ub.Shelf.uuid == tag_id,
                                               ub.Shelf.user_id == current_user.id).one_or_none()
     if not shelf:
-        log.debug("Received Kobo tag update request on a collection unknown to CalibreWeb")
+        log.debug("Received Kobo tag update request on a collection unknown to Autocaliweb")
         if config.config_kobo_proxy:
             return redirect_or_proxy_request()
         else:
-            abort(404, description="Collection isn't known to CalibreWeb")
+            abort(404, description="Collection isn't known to Autocaliweb")
 
     if request.method == "DELETE":
         if not shelf_lib.delete_shelf_helper(shelf):
@@ -707,8 +707,8 @@ def HandleTagAddItem(tag_id):
     shelf = ub.session.query(ub.Shelf).filter(ub.Shelf.uuid == tag_id,
                                               ub.Shelf.user_id == current_user.id).one_or_none()
     if not shelf:
-        log.debug("Received Kobo request on a collection unknown to CalibreWeb")
-        abort(404, description="Collection isn't known to CalibreWeb")
+        log.debug("Received Kobo request on a collection unknown to Autocaliweb")
+        abort(404, description="Collection isn't known to Autocaliweb")
 
     if not shelf_lib.check_shelf_edit_permissions(shelf):
         abort(401, description="User is unauthaurized to edit shelf.")
@@ -738,8 +738,8 @@ def HandleTagRemoveItem(tag_id):
                                               ub.Shelf.user_id == current_user.id).one_or_none()
     if not shelf:
         log.debug(
-            "Received a request to remove an item from a Collection unknown to CalibreWeb.")
-        abort(404, description="Collection isn't known to CalibreWeb")
+            "Received a request to remove an item from a Collection unknown to Autocaliweb.")
+        abort(404, description="Collection isn't known to Autocaliweb")
 
     if not shelf_lib.check_shelf_edit_permissions(shelf):
         abort(401, description="User is unauthaurized to edit shelf.")
@@ -1134,7 +1134,7 @@ def HandleProductsRequest(dummy=None):
 
 
 def make_calibre_web_auth_response():
-    # As described in kobo_auth.py, CalibreWeb doesn't make use practical use of this auth/device API call for
+    # As described in kobo_auth.py, Autocaliweb doesn't make use practical use of this auth/device API call for
     # authentation (nor for authorization). We return a dummy response just to keep the device happy.
     content = request.get_json()
     AccessToken = base64.b64encode(os.urandom(24)).decode('utf-8')

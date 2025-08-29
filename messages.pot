@@ -3666,10 +3666,18 @@ msgstr ""
 msgid "Show Overdrive tab"
 msgstr ""
 
+#: cps/templates/user_edit.html:155
+msgid "Enable Instapaper Integration"
+msgstr ""
+
 #: cps/admin.py:668
 msgid "Are you sure you want to change Kobo Plus behavior for the selected user(s)?"
 msgstr ""
 
 #: cps/admin.py:670
 msgid "Are you sure you want to change Overdrive behavior for the selected user(s)?"
+msgstr ""
+
+#: cps/admin.py:680
+msgid "Are you sure you want to change Instapaper Integration behavior for the selected user(s)?"
 msgstr ""

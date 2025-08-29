@@ -519,6 +519,8 @@ def edit_list_user(param):
                     user.kobo_plus = int(vals['value'] == 'true')
                 elif param == 'kobo_overdrive':
                     user.kobo_overdrive = int(vals['value'] == 'true')
+                elif param == 'kobo_instapaper':
+                    user.kobo_instapaper = int(vals['value'] == 'true')
                 elif param == 'kindle_mail':
                     user.kindle_mail = valid_email(vals['value']) if vals['value'] else ""
                 elif param.endswith('role'):
@@ -676,6 +678,8 @@ def load_dialogtexts(element_id):
         texts["main"] = _('Are you sure you want to change Kobo Plus behavior for the selected user(s)?')
     elif element_id == "kobo_overdrive":
         texts["main"] = _('Are you sure you want to change Overdrive behavior for the selected user(s)?')
+    elif element_id == "kobo_instapaper":
+        texts["main"] = _('Are you sure you want to change Instapaper Integration behavior for the selected user(s)?')
     elif element_id == "db_submit":
         texts["main"] = _('Are you sure you want to change Calibre library location?')
     elif element_id == "admin_refresh_cover_cache":
@@ -2034,6 +2038,7 @@ def _handle_new_user(to_save, content, languages, translations, kobo_support):
         content.kobo_only_shelves_sync = to_save.get("kobo_only_shelves_sync", 0) == "on"
         content.kobo_plus = to_save.get("kobo_plus", 0) == "on"
         content.kobo_overdrive = to_save.get("kobo_overdrive", 0) == "on"
+        content.kobo_instapaper = to_save.get("kobo_instapaper", 0) == "on"
         ub.session.add(content)
         ub.session.commit()
         flash(_("User '%(user)s' created", user=content.name), category="success")
@@ -2119,6 +2124,7 @@ def _handle_edit_user(to_save, content, languages, translations, kobo_support):
             kobo_sync_status.update_on_sync_shelfs(content.id)
         content.kobo_plus = int(to_save.get("kobo_plus") == "on") or 0
         content.kobo_overdrive = int(to_save.get("kobo_overdrive") == "on") or 0
+        content.kobo_instapaper = int(to_save.get("kobo_instapaper") == "on") or 0
         if to_save.get("default_language"):
             content.default_language = to_save["default_language"]
         if to_save.get("locale"):

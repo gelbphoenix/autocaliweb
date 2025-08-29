@@ -1620,6 +1620,7 @@ def change_profile(kobo_support, hardcover_support, local_oauth_check, oauth_sta
             kobo_sync_status.update_on_sync_shelfs(current_user.id)
         current_user.kobo_plus = int(to_save.get("kobo_plus") == "on") or 0
         current_user.kobo_overdrive = int(to_save.get("kobo_overdrive") == "on") or 0
+        current_user.kobo_instapaper = int(to_save.get("kobo_instapaper") == "on") or 0
         current_user.hardcover_token = to_save.get("hardcover_token", "").replace("Bearer ", "") or ""
     except Exception as ex:
         flash(str(ex), category="error")

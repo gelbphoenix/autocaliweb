@@ -259,6 +259,7 @@ class User(UserBase, Base):
     kobo_only_shelves_sync = Column(Integer, default=0)
     kobo_plus = Column(Integer, default=0)
     kobo_overdrive = Column(Integer, default=0)
+    kobo_instapaper = Column(Integer, default=0)
     hardcover_token = Column(String, default="")
 
 if oauth_support:
@@ -294,6 +295,7 @@ class Anonymous(AnonymousUserMixin, UserBase):
         self.kobo_only_shelves_sync = None
         self.kobo_plus = None
         self.kobo_overdrive = None
+        self.kobo_instapaper = None
         self.view_settings = None
         self.allowed_column_value = None
         self.allowed_tags = None
@@ -325,6 +327,7 @@ class Anonymous(AnonymousUserMixin, UserBase):
         self.kobo_only_shelves_sync = data.kobo_only_shelves_sync
         self.kobo_plus = data.kobo_plus
         self.kobo_overdrive = data.kobo_overdrive
+        self.kobo_instapaper = data.kobo_instapaper
 
     def role_admin(self):
         return False
@@ -655,6 +658,7 @@ def migrate_user_table(engine, _session):
             ('kobo_only_shelves_sync', "INTEGER NOT NULL DEFAULT 0"),
             ('kobo_plus', "INTEGER NOT NULL DEFAULT 0"),
             ('kobo_overdrive', "INTEGER NOT NULL DEFAULT 0"),
+            ('kobo_instapaper', "INTEGER NOT NULL DEFAULT 0"),
             ('hardcover_token', "VARCHAR(255) NOT NULL DEFAULT ''"),
         ]
         for col_name, col_def in needed:

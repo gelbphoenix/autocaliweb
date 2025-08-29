@@ -1186,6 +1186,7 @@ def HandleInitRequest():
         try:
             plus_enabled = bool(getattr(current_user, "kobo_plus", False))
             borrow_enabled = bool(getattr(current_user, "kobo_overdrive", False))
+            ip_enabled = bool(getattr(current_user, "kobo_instapaper", False))
         except AttributeError:
             pass
 
@@ -1219,6 +1220,15 @@ def HandleInitRequest():
                                                                isGreyscale='false'))
         kobo_resources["kobo_subscriptions_enabled"] = plus_enabled
         kobo_resources["kobo_nativeborrow_enabled"] = borrow_enabled
+        kobo_resources["instapaper_enabled"] = ip_enabled
+        if ip_enabled:
+            log.debug('Kobo: Instapaper integration enabled, checking endpoints')
+            if kobo_resources["instapaper_env_url"] != "https://www.instapaper.com/api/kobo":
+                log.debug('Kobo: Changed instapaper_env_url to "https://www.instapaper.com/api/kobo"')
+                kobo_resources["instapaper_env_url"] = "https://www.instapaper.com/api/kobo"
+            if kobo_resources["instapaper_link_account_start"] != "https://authorize.kobo.com/{region}/{language}/linkinstapaper":
+                log.debug('Kobo: Changed instapaper_link_account_start to "https://authorize.kobo.com/{region}/{language}/linkinstapaper"')
+                kobo_resources["instapaper_link_account_start"] = "https://authorize.kobo.com/{region}/{language}/linkinstapaper"
     else:
         kobo_resources["image_host"] = url_for("web.index", _external=True).strip("/")
         kobo_resources["image_url_quality_template"] = unquote(url_for("kobo.HandleCoverImageRequest",
@@ -1238,6 +1248,15 @@ def HandleInitRequest():
                                                                _external=True))
         kobo_resources["kobo_subscriptions_enabled"] = plus_enabled
         kobo_resources["kobo_nativeborrow_enabled"] = borrow_enabled
+        kobo_resources["instapaper_enabled"] = ip_enabled
+        if ip_enabled:
+            log.debug('Kobo: Instapaper integration enabled, checking endpoints')
+            if kobo_resources["instapaper_env_url"] != "https://www.instapaper.com/api/kobo":
+                log.debug('Kobo: Changed instapaper_env_url to "https://www.instapaper.com/api/kobo"')
+                kobo_resources["instapaper_env_url"] = "https://www.instapaper.com/api/kobo"
+            if kobo_resources["instapaper_link_account_start"] != "https://authorize.kobo.com/{region}/{language}/linkinstapaper":
+                log.debug('Kobo: Changed instapaper_link_account_start to "https://authorize.kobo.com/{region}/{language}/linkinstapaper"')
+                kobo_resources["instapaper_link_account_start"] = "https://authorize.kobo.com/{region}/{language}/linkinstapaper"
 
     response = make_response(jsonify({"Resources": kobo_resources}))
     response.headers["x-kobo-apitoken"] = "e30="
@@ -1323,6 +1342,9 @@ def NATIVE_KOBO_RESOURCES():
         "image_host": "//cdn.kobo.com/book-images/",
         "image_url_quality_template": "https://cdn.kobo.com/book-images/{ImageId}/{Width}/{Height}/{Quality}/{IsGreyscale}/image.jpg",
         "image_url_template": "https://cdn.kobo.com/book-images/{ImageId}/{Width}/{Height}/false/image.jpg",
+        "instapaper_enabled": "False",
+        "instapaper_env_url": "https://www.instapaper.com/api/kobo",
+        "instapaper_link_account_start": "https://authorize.kobo.com/{region}/{language}/linkinstapaper",
         "kobo_audiobooks_credit_redemption": "False",
         "kobo_audiobooks_enabled": "True",
         "kobo_audiobooks_orange_deal_enabled": "False",

@@ -150,6 +150,10 @@
       <input type="checkbox" name="kobo_overdrive" id="kobo_overdrive" {% if content.kobo_overdrive %}checked{% endif %}>
       <label for="kobo_overdrive">{{_('Show Overdrive tab')}}</label>
     </div>
+    <div class="form-group">
+      <input type="checkbox" name="kobo_instapaper" id="kobo_instapaper" {% if content.kobo_instapaper %}checked{% endif %}>
+      <label for="kobo_instapaper">{{_('Enable Instapaper Integration')}}</label>
+    </div>
     {% endif %}
     </div>
     <div class="col-sm-12">

@@ -43,10 +43,8 @@ from sqlalchemy.exc import IntegrityError, OperationalError, InvalidRequestError
 from sqlalchemy.sql.expression import func, or_, text
 
 from . import constants, logger, helper, services, cli_param
-from . import db, calibre_db, ub, web_server, config, updater_thread, gdriveutils, \
-    kobo_sync_status, schedule
-from .helper import check_valid_domain, send_test_mail, reset_password, generate_password_hash, check_email, \
-    valid_email, check_username
+from . import db, calibre_db, ub, web_server, config, updater_thread, gdriveutils, kobo_sync_status, schedule
+from .helper import check_valid_domain, send_test_mail, reset_password, generate_password_hash, check_email, valid_email, check_username
 from .embed_helper import get_calibre_binarypath
 from .gdriveutils import is_gdrive_ready, gdrive_support
 from .render_template import render_title_template, get_sidebar_config
@@ -55,6 +53,7 @@ from .usermanagement import user_login_required
 from .cw_babel import get_available_translations, get_available_locale, get_user_locale_language
 from . import debug_info
 from .string_helper import strip_whitespaces
+from .web import web
 
 log = logger.create()
 
@@ -302,8 +301,8 @@ def ajax_db_config():
 @admi.route("/admin/alive", methods=["GET"])
 @user_login_required
 @admin_required
-def calibreweb_alive():
-    return "", 200
+def autocaliweb_alive():
+    return redirect(url_for('web.health_check'))
 
 
 @admi.route("/admin/viewconfig")

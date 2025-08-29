@@ -50,13 +50,13 @@ v1/auth/device endpoint with the secret UserKey and the device's DeviceId.
 
 Our implementation:
 We pretty much ignore all of the above. To authenticate the user, we generate a random
-and unique token that they append to the CalibreWeb Url when setting up the api_store
+and unique token that they append to the Autocaliweb Url when setting up the api_store
 setting on the device.
-Thus, every request from the device to the api_store will hit CalibreWeb with the
+Thus, every request from the device to the api_store will hit Autocaliweb with the
 auth_token in the url (e.g: https://mylibrary.com/<auth_token>/v1/library/sync).
 In addition, once authenticated we also set the login cookie on the response that will
 be sent back for the duration of the session to authorize subsequent API calls (in
-particular calls to non-Kobo specific endpoints such as the CalibreWeb book download).
+particular calls to non-Kobo specific endpoints such as the Autocaliweb book download).
 """
 
 from binascii import hexlify

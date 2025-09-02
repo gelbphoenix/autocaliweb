@@ -28,6 +28,7 @@ import mimetypes
 from flask import Flask
 from .MyLoginManager import MyLoginManager
 from flask_principal import Principal
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from . import logger
 from .cli import CliParameter
@@ -91,6 +92,8 @@ app.config.update(
     SESSION_COOKIE_NAME=os.environ.get('COOKIE_PREFIX', "") + "session",
     REMEMBER_COOKIE_NAME=os.environ.get('COOKIE_PREFIX', "") + "remember_token"
 )
+
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
 lm = MyLoginManager()
 

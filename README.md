@@ -68,7 +68,7 @@ _This software is a fork of [Calibre-Web](https://github.com/janeczku/calibre-we
 
 - Usage of `DOCKER_MODS` from sources like linuxserver.io and others
 - Listing and caching of Author information and other books from Goodreads or Hardcover
-- User en- or disabling of the Kobo Sync and/or Overdrive tabs when using Kobo sync
+- User en- or disabling of the Kobo Sync and Overdrive tabs as well as the Instapaper integration when using Kobo sync
 - Support for custom OIDC providers (with support for /.well-known/openid-configuration)
 - Support for manual installation (without docker specific features)
 - LitRes as metadata provider

@@ -1205,6 +1205,11 @@ def _configuration_oauth_helper(to_save):
             element['oauth_client_id'] = to_save.get(client_id, "")
             element['oauth_client_secret'] = to_save.get(client_secret, "")
 
+        metadata_url = to_save.get("config_3_metadata_url", "")
+        if metadata_url != element.get('metadata_url', ""):
+            reboot_required = True
+            element['metadata_url'] = metadata_url
+
         if to_save.get(client_id) and to_save.get(client_secret):
             active_oauths += 1
             element["active"] = 1

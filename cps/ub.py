@@ -279,7 +279,6 @@ class OAuthProvider(Base):
     oauth_base_url = Column(String)
     oauth_auth_url = Column(String)
     oauth_token_url = Column(String)
-    oauth_userinfo_url = Column(String)
     scope = Column(String, default="openid profile email")
     username_mapper = Column(String, default="preferred_username")
     email_mapper = Column(String, default="email")
@@ -676,7 +675,6 @@ def migrate_oauth_table(engine, _session):
             ('oauth_base_url', "VARCHAR(255)"),
             ('oauth_auth_url', "VARCHAR(255)"),
             ('oauth_token_url', "VARCHAR(255)"),
-            ('oauth_userinfo_url', "VARCHAR(255)"),
             ('scope', "VARCHAR(255) NOT NULL DEFAULT 'openid profile email'"),
             ('username_mapper', "VARCHAR(255) NOT NULL DEFAULT 'preferred_username'"),
             ('email_mapper', "VARCHAR(255) NOT NULL DEFAULT 'email'"),

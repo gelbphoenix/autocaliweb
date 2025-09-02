@@ -311,7 +311,6 @@ def generate_oauth_blueprints():
                 scope=element['scope'],
                 redirect_to="oauth."+element['provider_name']+"_login",
             )
-            blueprint.userinfo_url = userinfo_url
             generic = blueprint
         element['blueprint'] = blueprint
         element['blueprint'].backend = OAuthBackend(ub.OAuth, ub.session, str(element['id']),

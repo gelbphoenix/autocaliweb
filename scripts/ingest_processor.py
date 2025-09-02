@@ -80,7 +80,10 @@ class NewBookProcessor:
         if isinstance(self.ingest_ignored_formats, str):
             self.ingest_ignored_formats = [self.ingest_ignored_formats]
 
-        self.ingest_ignored_formats.extend(['.crdownload', '.part', '.download'])
+        for tmp_ext in ("crdownload", "download", "part", "uploading", "temp"):
+            if tmp_ext not in self.ingest_ignored_formats:
+                self.ingest_ignored_formats.extend(tmp_ext)
+
         self.convert_ignored_formats = self.acw_settings['auto_convert_ignored_formats']
         self.is_kindle_epub_fixer = self.acw_settings['kindle_epub_fixer']
 
@@ -236,9 +239,24 @@ class NewBookProcessor:
 
     def delete_current_file(self) -> None:
         """Deletes file just processed from ingest folder"""
-        os.remove(self.filepath) # Removes processed file
-        if not os.path.samefile(os.path.dirname(self.filepath), self.ingest_folder): # File is not on ingest_folder, subdirectories to delete
-            subprocess.run(["find", f"{os.path.dirname(self.filepath)}", "-type", "d", "-empty", "-delete"]) # Removes any now empty folders including the parent directory
+        try:
+            if os.path.exists(self.filepath):
+                os.remove(self.filepath)
+            else:
+                # Likely a transient or temporary file that was renamed before we processed cleanup
+                print(f"[ingest-processor]: Skipping delete; file already gone: {self.filepath}", flush=True)
+                return
+            
+            parent_dir = os.path.dirname(self.filepath)
+            if os.path.isdir(parent_dir) and os.path.exists(parent_dir):
+                try:
+                    if os.path.exists(self.ingest_folder) and os.path.normpath(parent_dir) != self.ingest_folder:
+                        subprocess.run(["find", f"{parent_dir}", "-type", "d", "-empty", "-delete"], check=True)
+                except Exception as e:
+                    print(f"[ingest-processor]: WARN: Failed pruning empty folders for {parent_dir}: {e}", flush=True)
+        
+        except Exception as e:
+            print(f"[ingest-processor]: WARN: Failed to delete processed file {self.filepath}: {e}", flush=True)
 
 
     def add_book_to_library(self, book_path:str, text: bool=True, format: str="text") -> None:

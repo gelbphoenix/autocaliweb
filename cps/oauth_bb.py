@@ -310,11 +310,11 @@ def generate_oauth_blueprints():
                 client_secret=element['oauth_client_secret'],
                 base_url=base_url,
                 authorization_url=auth_url,
-                userinfo_url=userinfo_url,
                 token_url=token_url,
                 scope=element['scope'],
                 redirect_to="oauth."+element['provider_name']+"_login",
             )
+            blueprint.userinfo_url=userinfo_url,
             generic = blueprint
         element['blueprint'] = blueprint
         element['blueprint'].backend = OAuthBackend(ub.OAuth, ub.session, str(element['id']),

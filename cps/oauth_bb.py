@@ -245,6 +245,7 @@ def generate_oauth_blueprints():
                 oauth_provider.oauth_base_url = metadata.get('issuer')
                 oauth_provider.oauth_auth_url = metadata.get('authorization_endpoint')
                 oauth_provider.oauth_token_url = metadata.get('token_endpoint')
+                oauth_provider.oauth_userinfo_url = metadata.get('userinfo_endpoint')
                 ub.session_commit(f"Updated URLs for {oauth_provider.provider_name} from metadata")
 
     ele1 = dict(provider_name='github',
@@ -272,6 +273,7 @@ def generate_oauth_blueprints():
                 oauth_base_url=oauth_ids[2].oauth_base_url,
                 oauth_auth_url=oauth_ids[2].oauth_auth_url,
                 oauth_token_url=oauth_ids[2].oauth_token_url,
+                oauth_userinfo_url=oauth_ids[2].oauth_userinfo_url,
                 username_mapper=oauth_ids[2].username_mapper,
                 email_mapper=oauth_ids[2].email_mapper,
                 metadata_url=oauth_ids[2].metadata_url,
@@ -300,6 +302,7 @@ def generate_oauth_blueprints():
             base_url = element['oauth_base_url'] or ''
             auth_url = element['oauth_auth_url'] or ''
             token_url = element['oauth_token_url'] or ''
+            userinfo_url = element['oauth_userinfo_url'] or ''
             blueprint = blueprint_func(
                 "generic",
                 __name__,
@@ -307,6 +310,7 @@ def generate_oauth_blueprints():
                 client_secret=element['oauth_client_secret'],
                 base_url=base_url,
                 authorization_url=auth_url,
+                userinfo_url=userinfo_url,
                 token_url=token_url,
                 scope=element['scope'],
                 redirect_to="oauth."+element['provider_name']+"_login",

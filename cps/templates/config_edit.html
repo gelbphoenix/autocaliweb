@@ -367,7 +367,13 @@
               <input type="text" class="form-control" id="config_{{ prov['id'] }}_oauth_token_url" name="config_{{ prov['id'] }}_oauth_token_url" value="{% if prov['oauth_token_url']%}{{ prov['oauth_token_url'] }}{% endif %}" autocomplete="off">
             </div>
           {% endif %}
-        </div>
+          {% if 'oauth_userinfo_url' in prov %}
+            <div class="form-group" style="margin-left: 10px;">
+              <label for="config_{{ prov['id'] }}_oauth_userinfo_url">{{_('%(provider)s OAuth Userinfo URL', provider=prov['provider_name'])}}</label>
+              <input type="text" class="form-control" id="config_{{ prov['id'] }}_oauth_userinfo_url" name="config_{{ prov['id'] }}_oauth_userinfo_url" value="{% if prov['oauth_userinfo_url']%}{{ prov['oauth_userinfo_url'] }}{% endif %}" autocomplete="off">
+            </div>
+          {% endif %}
+          </div>
         {% if 'username_mapper' in prov %}
           <div class="form-group">
             <label for="config_{{ prov['id'] }}_username_mapper">{{_('%(provider)s OAuth Username mapper', provider=prov['provider_name'])}}</label>

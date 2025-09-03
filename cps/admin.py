@@ -1227,6 +1227,7 @@ def _configuration_oauth_helper(to_save):
                 "oauth_base_url": to_save.get("config_" + str(element['id']) + "_oauth_base_url", ""),
                 "oauth_auth_url": to_save.get("config_" + str(element['id']) + "_oauth_auth_url", ""),
                 "oauth_token_url": to_save.get("config_" + str(element['id']) + "_oauth_token_url", ""),
+                "oauth_userinfo_url": to_save.get("config_" + str(element['id']) + "_oauth_userinfo_url", ""),
                 "username_mapper": to_save.get("config_" + str(element['id']) + "_username_mapper", ""),
                 "email_mapper": to_save.get("config_" + str(element['id']) + "_email_mapper", ""),
                 "login_button": to_save.get("config_" + str(element['id']) + "_login_button", ""),

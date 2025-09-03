@@ -14,6 +14,7 @@
     {% endif %}
 
     <!-- Bootstrap -->
+    />
     <link
       rel="apple-touch-icon"
       sizes="140x140"
@@ -22,6 +23,18 @@
     <link
       rel="shortcut icon"
       href="{{ url_for('static', filename='favicon.ico') }}"
+    />
+    <link
+      rel="icon"
+      href="{{ url_for('static', filename='icon-dark.svg') }}"
+      type="image/svg+xml"
+      media="(prefers-color-scheme: light)"
+    />
+    <link
+      rel="icon"
+      href="{{ url_for('static', filename='icon-light.svg') }}"
+      type="image/svg+xml"
+      media="(prefers-color-scheme: dark)"
     />
     <link
       href="{{ url_for('static', filename='css/libs/bootstrap.min.css') }}"

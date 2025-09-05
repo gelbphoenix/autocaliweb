@@ -314,7 +314,7 @@ def generate_oauth_blueprints():
                 scope=element['scope'],
                 redirect_to="oauth."+element['provider_name']+"_login",
             )
-            blueprint.userinfo_url=userinfo_url,
+            blueprint.userinfo_url=userinfo_url
             generic = blueprint
         element['blueprint'] = blueprint
         element['blueprint'].backend = OAuthBackend(ub.OAuth, ub.session, str(element['id']),
@@ -379,7 +379,7 @@ if ub.oauth_support:
         resp = blueprint.session.get(blueprint.userinfo_url, headers=headers)
         if not resp.ok:
             flash(_("Failed to fetch user info from Generic OAuth."), category="error")
-            log.error("Failed to fetch user info from Generic OAuth: %s", resp.text)
+            log.error(f"Failed to fetch user info from Generic OAuth: {blueprint.userinfo_url} {headers} {resp.status_code} {resp.text}")
             return redirect(url_for('web.login'))
         
         username_mapper = oauthblueprints[2].get('username_mapper') or 'username'

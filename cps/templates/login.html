@@ -26,6 +26,15 @@
         placeholder="{{_('Password')}}"
         value="{{ password }}"
       />
+      <div class="checkbox">
+        <label>
+          <input
+            type="checkbox"
+            onclick="password.type = this.checked ? 'text' : 'password'"
+          />
+          {{_('Show Password')}}
+        </label>
+      </div>
     </div>
     <div class="checkbox">
       <label>

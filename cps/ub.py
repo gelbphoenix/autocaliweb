@@ -261,6 +261,7 @@ class User(UserBase, Base):
     kobo_overdrive = Column(Integer, default=0)
     kobo_instapaper = Column(Integer, default=0)
     hardcover_token = Column(String, default="")
+    auto_send_enabled = Column(Boolean, default=False)
 
 if oauth_support:
     class OAuth(OAuthConsumerMixin, Base):
@@ -307,6 +308,7 @@ class Anonymous(AnonymousUserMixin, UserBase):
         self.id = None
         self.role = None
         self.name = None
+        self.auto_send_enabled = False
         self.loadSettings()
 
     def loadSettings(self):
@@ -328,6 +330,7 @@ class Anonymous(AnonymousUserMixin, UserBase):
         self.kobo_plus = data.kobo_plus
         self.kobo_overdrive = data.kobo_overdrive
         self.kobo_instapaper = data.kobo_instapaper
+        self.auto_send_enabled = data.auto_send_enabled
 
     def role_admin(self):
         return False
@@ -660,6 +663,7 @@ def migrate_user_table(engine, _session):
             ('kobo_overdrive', "INTEGER NOT NULL DEFAULT 0"),
             ('kobo_instapaper', "INTEGER NOT NULL DEFAULT 0"),
             ('hardcover_token', "VARCHAR(255) NOT NULL DEFAULT ''"),
+            ('auto_send_enabled', "BOOLEAN NOT NULL DEFAULT 0"),
         ]
         for col_name, col_def in needed:
             exists = conn.execute(text(f"PRAGMA table_info(user)")).fetchall()

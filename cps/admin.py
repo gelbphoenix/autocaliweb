@@ -2130,6 +2130,8 @@ def _handle_edit_user(to_save, content, languages, translations, kobo_support):
         content.kobo_plus = int(to_save.get("kobo_plus") == "on") or 0
         content.kobo_overdrive = int(to_save.get("kobo_overdrive") == "on") or 0
         content.kobo_instapaper = int(to_save.get("kobo_instapaper") == "on") or 0
+        content.auto_send_enabled = to_save.get("auto_send_enabled") == "on"
+        content.auto_metadata_fetch = to_save.get("auto_metadata_fetch") == "on"
         if to_save.get("default_language"):
             content.default_language = to_save["default_language"]
         if to_save.get("locale"):

@@ -229,10 +229,13 @@ class ACW_DB:
         headers = [header[0] for header in self.cur.description]
         acw_settings = [dict(zip(headers,row)) for row in self.cur.fetchall()][0]
 
+        integer_settings = ['ingest_timeout_minutes', 'auto_send_delay_minutes']
+        json_settings = ['metadata_provider_hierarchy']
+
         for header in headers:
-            if type(acw_settings[header]) == int:
+            if isinstance(acw_settings[header], int) and header not in integer_settings:
                 acw_settings[header] = bool(acw_settings[header])
-            elif type(acw_settings[header]) == str and ',' in acw_settings[header]:
+            elif isinstance(acw_settings[header], str) and ',' in acw_settings[header] and header not in json_settings:
                 acw_settings[header] = acw_settings[header].split(',')
 
         return acw_settings

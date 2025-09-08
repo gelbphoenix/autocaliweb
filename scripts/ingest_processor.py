@@ -13,7 +13,60 @@ from acw_db import ACW_DB
 from kindle_epub_fixer import EPUBFixer
 import audiobook
 
+# Optional: enable GDrive sync and auto-send by importing cps modules when available
+_GDRIVE_AVAILABLE = False
+_CPS_AVAILABLE = False
+_gdriveutils = None
+_cps_config = None
+fetch_and_apply_metadata = None
+TaskAutoSend = None
+WorkerThread = None
+_ub = None
 
+try:
+    # Ensure project root is on sys.path to import cps
+    cps_path = os.path.dirname(os.path.dirname(__file__))
+    if cps_path not in sys.path:
+        sys.path.append(cps_path)
+    
+    # Import GDrive functionality
+    try:
+        from cps import gdriveutils as _gdriveutils, config as _cps_config
+        _GDRIVE_AVAILABLE = True
+        print("[ingest-processor] GDrive functionality available", flush=True)
+    except ImportError as e:
+        print(f"[ingest-processor] GDrive functionality not available: {e}", flush=True)
+        _gdriveutils = None
+        _cps_config = None
+
+    # Import auto-send and metadata functionality
+    try:
+        from cps.metadata_helper import fetch_and_apply_metadata
+        from cps.tasks.auto_send import TaskAutoSend
+        from cps.services.worker import WorkerThread
+        from cps import ub as _ub
+        _CPS_AVAILABLE = True
+        print("[ingest-processor] Auto-send and metadata functionality available", flush=True)
+    except ImportError as e:
+        print(f"[ingest-processor] Auto-send/metadata functionality not available: {e}", flush=True)
+        fetch_and_apply_metadata = None
+        TaskAutoSend = None
+        WorkerThread = None
+        _ub = None
+
+except Exception as e:
+    print(f"[ingest-processor] WARN: Unexpected error during CPS module import: {e}", flush=True)
+    _GDRIVE_AVAILABLE = False
+    _CPS_AVAILABLE = False
+
+def gdrive_sync_if_enabled():
+    """Sync Calibre library to Google Drive if enabled in app config."""
+    if _GDRIVE_AVAILABLE and getattr(_cps_config, "config_use_google_drive", False):
+        try:
+            _gdriveutils.updateGdriveCalibreFromLocal()
+            print("[ingest-processor] GDrive sync completed.", flush=True)
+        except Exception as e:
+            print(f"[ingest-processor] WARN: GDrive sync failed: {e}", flush=True)
 
 # Creates a lock file unless one already exists meaning an instance of the script is
 # already running, then the script is closed, the user is notified and the program
@@ -313,6 +366,12 @@ class NewBookProcessor:
 
             self.db.import_add_entry(import_path.stem,
                                     str(self.acw_settings["auto_backup_imports"]))
+            
+            gdrive_sync_if_enabled()
+
+            self.fetch_metadata_if_enabled(staged_path.stem)
+
+            self.trigger_auto_send_if_enabled(staged_path.stem, book_path)
 
         except subprocess.CalledProcessError as e:
             print(f"[ingest-processor] {import_path.stem} was not able to be added to the Calibre Library due to the following error:\nCALIBREDB EXIT/ERROR CODE: {e.returncode}\n{e.stderr}", flush=True)
@@ -327,6 +386,108 @@ class NewBookProcessor:
             print(f"[ingest-processor] {os.path.basename(filepath)} successfully processed with the acw-kindle-epub-fixer!")
         except Exception as e:
             print(f"[ingest-processor] An error occurred while processing {os.path.basename(filepath)} with the kindle-epub-fixer. See the following error:\n{e}")
+
+
+    def fetch_metadata_if_enabled(self, book_title: str) -> None:
+        """Fetch and apply metadata for newly ingested books if enabled"""
+        if not _CPS_AVAILABLE:
+            print("[ingest-processor] CPS modules not available, skipping metadata fetch", flush=True)
+            return
+            
+        if fetch_and_apply_metadata is None:
+            print("[ingest-processor] Metadata helper not available, skipping metadata fetch", flush=True)
+            return
+            
+        try:
+            # Find the book that was just added to get its ID
+            calibre_db_path = os.path.join(self.library_dir, 'metadata.db')
+            with sqlite3.connect(calibre_db_path, timeout=30) as con:
+                cur = con.cursor()
+                # Get the most recently added book with this title
+                cur.execute("SELECT id, title FROM books WHERE title LIKE ? ORDER BY timestamp DESC LIMIT 1", (f"%{book_title}%",))
+                result = cur.fetchone()
+                
+            if not result:
+                print(f"[ingest-processor] Could not find book ID for metadata fetch: {book_title}", flush=True)
+                return
+                
+            book_id = result[0]
+            actual_title = result[1]
+            
+            print(f"[ingest-processor] Attempting to fetch metadata for: {actual_title}", flush=True)
+            
+            # Fetch and apply metadata (now admin-controlled only)
+            if fetch_and_apply_metadata(book_id):
+                print(f"[ingest-processor] Successfully fetched and applied metadata for: {actual_title}", flush=True)
+            else:
+                print(f"[ingest-processor] No metadata improvements found for: {actual_title}", flush=True)
+                
+        except Exception as e:
+            print(f"[ingest-processor] Error fetching metadata: {e}", flush=True)
+
+
+    def trigger_auto_send_if_enabled(self, book_title: str, book_path: str) -> None:
+        """Trigger auto-send for users who have it enabled"""
+        if not _CPS_AVAILABLE:
+            print("[ingest-processor] CPS modules not available, skipping auto-send", flush=True)
+            return
+            
+        if TaskAutoSend is None or WorkerThread is None:
+            print("[ingest-processor] Auto-send functionality not available, skipping auto-send", flush=True)
+            return
+            
+        try:
+            # Find the book that was just added to get its ID
+            calibre_db_path = os.path.join(self.library_dir, 'metadata.db')
+            with sqlite3.connect(calibre_db_path, timeout=30) as con:
+                cur = con.cursor()
+                # Get the most recently added book(s) with this title
+                cur.execute("SELECT id, title FROM books WHERE title LIKE ? ORDER BY timestamp DESC LIMIT 1", (f"%{book_title}%",))
+                result = cur.fetchone()
+                
+            if not result:
+                print(f"[ingest-processor] Could not find book ID for auto-send: {book_title}", flush=True)
+                return
+                
+            book_id = result[0]
+            actual_title = result[1]
+            
+            # Get users with auto-send enabled
+            app_db_path = "/config/app.db"
+            with sqlite3.connect(app_db_path, timeout=30) as con:
+                cur = con.cursor()
+                cur.execute("""
+                    SELECT id, name, kindle_mail 
+                    FROM user 
+                    WHERE auto_send_enabled = 1 
+                    AND kindle_mail IS NOT NULL 
+                    AND kindle_mail != ''
+                """)
+                auto_send_users = cur.fetchall()
+                
+            if not auto_send_users:
+                print(f"[ingest-processor] No users with auto-send enabled found", flush=True)
+                return
+                
+            # Queue auto-send tasks for each user
+            for user_id, username, kindle_mail in auto_send_users:
+                try:
+                    delay_minutes = self.cwa_settings.get('auto_send_delay_minutes', 5)
+                    
+                    # Create auto-send task
+                    task_message = f"Auto-sending '{actual_title}' to {username}'s eReader(s)"
+                    task = TaskAutoSend(task_message, book_id, user_id, delay_minutes)
+                    
+                    # Add to worker queue
+                    WorkerThread.add(username, task)
+                    
+                    print(f"[ingest-processor] Queued auto-send for '{actual_title}' to user {username} ({kindle_mail})", flush=True)
+                    
+                except Exception as e:
+                    print(f"[ingest-processor] Error queuing auto-send for user {username}: {e}", flush=True)
+                    
+        except Exception as e:
+            print(f"[ingest-processor] Error in auto-send trigger: {e}", flush=True)
 
 
     def empty_tmp_con_dir(self):

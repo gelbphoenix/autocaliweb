@@ -165,8 +165,13 @@ def set_acw_settings():
     boolean_settings = []
     string_settings = []
     list_settings = []
+    integer_settings = ['ingest_timeout_minutes', 'auto_send_delay_minutes']
+    json_settings = ['metadata_provider_hierarchy']
+
     for setting in acw_default_settings:
-        if type(acw_default_settings[setting]) == int:
+        if setting in integer_settings or setting in json_settings:
+            continue
+        elif isinstance(acw_default_settings[setting], int):
             boolean_settings.append(setting)
         elif type(acw_default_settings[setting]) == str and acw_default_settings[setting] != "":
             string_settings.append(setting)
@@ -214,6 +219,53 @@ def set_acw_settings():
             if result['auto_convert_target_format'] in result['auto_ingest_ignored_formats']:
                 result['auto_ingest_ignored_formats'].remove(result['auto_convert_target_format'])
 
+            # Handle integer settings
+            for setting in integer_settings:
+                value = request.form.get(setting)
+                if value is not None:
+                    try:
+                        int_value = int(value)
+                        if setting == "ingest_timeout_minutes":
+                            int_value = max(5, min(120, int_value)) # Clamp between 5 and 120 minutes
+                        elif setting == "auto_send_delay_minutes":
+                            int_value = max(1, min(60, int_value)) # Clamp between 1 and 60 minutes
+                        result[setting] = int_value
+                    except (ValueError, TypeError):
+                        if setting == "ingest_timeout_minutes":
+                            result[setting] = acw_db.acw_settings.get(setting, 15)
+                        elif setting == "auto_send_delay_minutes":
+                            result[setting] = acw_db.acw_settings.get(setting, 5)
+                else:
+                    if setting == "ingest_timeout_minutes":
+                        result[setting] = acw_db.acw_settings.get(setting, 15)
+                    elif setting == "auto_send_delay_minutes":
+                        result[setting] = acw_db.acw_settings.get(setting, 5)
+
+            # Handle json settings
+            for setting in json_settings:
+                value = request.form.get(setting)
+                if value is not None:
+                    try:
+                        import json
+                        json_value = json.loads(value)
+                        if setting == "metadata_provider_hierarchy":
+                            if isinstance(json_value, list) and all(isinstance(provider, str) for provider in json_value):
+                                result[setting] = json.dumps(json_value)
+                            else:
+                                result[setting] = acw_db.acw_settings.get(setting, '["ibdb","google","dnb"]')
+                        else:
+                            result[setting] = json.dumps(json_value)
+                    except (json.JSONDecodeError, ValueError, TypeError):
+                        if setting == "metadata_provider_hierarchy":
+                            result[setting] = acw_db.acw_settings.get(setting, '["ibdb","google","dnb"]')
+                        else:
+                            result[setting] = acw_db.acw_settings.get(setting, '[]')
+                else:
+                    if setting == "metadata_provider_hierarchy":
+                        result[setting] = acw_db.acw_settings.get(setting, '["ibdb","google","dnb"]')
+                    else:
+                        result[setting] = acw_db.acw_settings.get(setting, '[]')
+
             # DEBUGGING
             # with open(os.path.join(CONFIG_BASE_DIR, "post_request") ,"w") as f:
             #     for key in result.keys():
@@ -231,7 +283,8 @@ def set_acw_settings():
             acw_settings = acw_db.get_acw_settings()
 
     elif request.method == 'GET':
-        ...
+        acw_db = ACW_DB()
+        acw_settings = acw_db.get_acw_settings()
 
     return render_title_template("acw_settings.html", title=_("Autocaliweb User Settings"), page="acw-settings",
                                     acw_settings=acw_settings, ignorable_formats=ignorable_formats,

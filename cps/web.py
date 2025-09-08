@@ -1622,6 +1622,9 @@ def change_profile(kobo_support, hardcover_support, local_oauth_check, oauth_sta
         current_user.kobo_overdrive = int(to_save.get("kobo_overdrive") == "on") or 0
         current_user.kobo_instapaper = int(to_save.get("kobo_instapaper") == "on") or 0
         current_user.hardcover_token = to_save.get("hardcover_token", "").replace("Bearer ", "") or ""
+        current_user.auto_send_enabled = to_save.get("auto_send_enabled") == "on"
+        current_user.auto_metadata_fetch = to_save.get("auto_metadata_fetch") == "on"
+        
     except Exception as ex:
         flash(str(ex), category="error")
         return render_title_template("user_edit.html",

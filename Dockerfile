@@ -117,6 +117,6 @@ VOLUME /calibre-library
 
 # Healthcheck
 HEALTHCHECK --interval=60s --timeout=10s --start-period=5s --retries=2 \
-  CMD curl --fail -m 5 http://localhost:8083/login || exit 1
+  CMD curl --fail -m 5 http://localhost:8083/health || exit 1
 
 CMD ["/init"]

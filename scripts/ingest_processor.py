@@ -472,7 +472,7 @@ class NewBookProcessor:
             # Queue auto-send tasks for each user
             for user_id, username, kindle_mail in auto_send_users:
                 try:
-                    delay_minutes = self.cwa_settings.get('auto_send_delay_minutes', 5)
+                    delay_minutes = self.acw_settings.get('auto_send_delay_minutes', 5)
                     
                     # Create auto-send task
                     task_message = f"Auto-sending '{actual_title}' to {username}'s eReader(s)"

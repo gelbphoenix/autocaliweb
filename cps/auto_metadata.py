@@ -16,10 +16,10 @@ from cps.string_helper import strip_whitespaces
 log = logger.create()
 
 
-def get_metadata_provider_hierarchy(cwa_settings: Dict[str, Any]) -> List[str]:
+def get_metadata_provider_hierarchy(acw_settings: Dict[str, Any]) -> List[str]:
     """Get the configured metadata provider hierarchy"""
     try:
-        hierarchy_json = cwa_settings.get('metadata_provider_hierarchy', '["google","douban","dnb"]')
+        hierarchy_json = acw_settings.get('metadata_provider_hierarchy', '["google","douban","dnb"]')
         if isinstance(hierarchy_json, str):
             hierarchy = json.loads(hierarchy_json)
         else:
@@ -48,10 +48,10 @@ def fetch_metadata_for_book(book_title: str, book_authors: str = "", user_id: Op
         
         # Get CWA settings
         cwa_db = CWA_DB()
-        cwa_settings = cwa_db.cwa_settings
+        acw_settings = cwa_db.acw_settings
         
         # Check if auto metadata fetch is globally enabled
-        if not cwa_settings.get('auto_metadata_fetch_enabled', False):
+        if not acw_settings.get('auto_metadata_fetch_enabled', False):
             log.debug("Auto metadata fetch is globally disabled")
             return None
             
@@ -78,7 +78,7 @@ def fetch_metadata_for_book(book_title: str, book_authors: str = "", user_id: Op
         log.info(f"Fetching metadata for: {query}")
         
         # Get provider hierarchy
-        provider_hierarchy = get_metadata_provider_hierarchy(cwa_settings)
+        provider_hierarchy = get_metadata_provider_hierarchy(acw_settings)
         
         # Get available metadata providers
         available_providers = {provider.__id__: provider for provider in cl if provider.active}

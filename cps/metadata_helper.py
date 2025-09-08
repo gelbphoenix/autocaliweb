@@ -31,9 +31,9 @@ def fetch_and_apply_metadata(book_id: int, user_enabled: bool = False) -> bool:
     try:
         # Check global settings (admin-controlled only)
         cwa_db = CWA_DB()
-        cwa_settings = cwa_db.get_cwa_settings()
+        acw_settings = cwa_db.get_acw_settings()
         
-        if not cwa_settings.get('auto_metadata_fetch_enabled', False):
+        if not acw_settings.get('auto_metadata_fetch_enabled', False):
             log.debug("Auto metadata fetch disabled by administrator")
             return False
             
@@ -54,7 +54,7 @@ def fetch_and_apply_metadata(book_id: int, user_enabled: bool = False) -> bool:
         
         # Get provider hierarchy
         try:
-            provider_hierarchy = json.loads(cwa_settings.get('metadata_provider_hierarchy', '["google","douban","dnb","ibdb","comicvine"]'))
+            provider_hierarchy = json.loads(acw_settings.get('metadata_provider_hierarchy', '["google","douban","dnb","ibdb","comicvine"]'))
         except (json.JSONDecodeError, TypeError):
             provider_hierarchy = ["google", "douban", "dnb", "ibdb", "comicvine"]
             
@@ -115,8 +115,8 @@ def _apply_metadata_to_book(book, metadata, calibre_db_instance) -> bool:
     try:
         # Get CWA settings to check smart application preference
         cwa_db = CWA_DB()
-        cwa_settings = cwa_db.get_cwa_settings()
-        use_smart_application = cwa_settings.get('auto_metadata_smart_application', False)
+        acw_settings = cwa_db.get_acw_settings()
+        use_smart_application = acw_settings.get('auto_metadata_smart_application', False)
         
         updated = False
         

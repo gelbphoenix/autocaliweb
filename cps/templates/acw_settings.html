@@ -136,7 +136,7 @@
           tool made by <a href="https://github.com/innocenat">innocenat</a>.</i>
       </p>
 
-      {% if cwa_settings['auto_metadata_fetch_enabled'] %}
+      {% if acw_settings['auto_metadata_fetch_enabled'] %}
       <input type="checkbox" id="auto_metadata_fetch_enabled" name="auto_metadata_fetch_enabled" value="True" checked style="accent-color: var(--color-secondary);" data-toggle="tooltip" data-placement="right" title="Automatically fetches metadata for newly ingested books">
       {% else %}
       <input type="checkbox" id="auto_metadata_fetch_enabled" name="auto_metadata_fetch_enabled" value="True" style="accent-color: var(--color-secondary);" data-toggle="tooltip" data-placement="right" title="Automatically fetches metadata for newly ingested books">
@@ -146,7 +146,7 @@
         {{_('When active, CWA will automatically attempt to fetch and apply metadata (title, author, description, cover, etc.) for newly ingested books using the configured metadata provider hierarchy. This helps improve the quality of book information, especially for books with poor or missing metadata.')}}
       </p>
 
-      {% if cwa_settings['auto_metadata_smart_application'] %}
+      {% if acw_settings['auto_metadata_smart_application'] %}
       <input type="checkbox" id="auto_metadata_smart_application" name="auto_metadata_smart_application" value="True" checked style="accent-color: var(--color-secondary);" data-toggle="tooltip" data-placement="right" title="Apply intelligent criteria when replacing existing metadata">
       {% else %}
       <input type="checkbox" id="auto_metadata_smart_application" name="auto_metadata_smart_application" value="True" style="accent-color: var(--color-secondary);" data-toggle="tooltip" data-placement="right" title="Apply intelligent criteria when replacing existing metadata">
@@ -168,7 +168,7 @@
       <input type="number" 
              name="ingest_timeout_minutes" 
              id="ingest_timeout_minutes" 
-             value="{{ cwa_settings['ingest_timeout_minutes'] }}" 
+             value="{{ acw_settings['ingest_timeout_minutes'] }}" 
              min="5" 
              max="120" 
              style="width: 100px;
@@ -189,7 +189,7 @@
       <input type="number" 
              name="auto_send_delay_minutes" 
              id="auto_send_delay_minutes" 
-             value="{{ cwa_settings['auto_send_delay_minutes'] }}" 
+             value="{{ acw_settings['auto_send_delay_minutes'] }}" 
              min="1" 
              max="60" 
              style="width: 100px;

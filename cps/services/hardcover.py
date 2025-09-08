@@ -117,15 +117,18 @@ class HardcoverClient:
             # Book doesn't exist, add it in Reading status
             if not book: 
                 book = self.add_book(ids, status=2)
+                log.debug("Added book %s to Hardcover in 'Reading' status", book.get("name"))
             # Edge case: if book doesn't exist and add_book failed to add it
             if book is None:
                 print(f"Warning: Could not find book with identifiers {ids} for progress update. Skipping.")
-            return # Exit early if the book object is None
+                return # Exit early if the book object is None
             # Book is either WTR or Read, and we aren't finished reading
             if book.get("status_id") != 2 and progress_percent != 100: 
                 book = self.change_book_status(book, 2)
+                log.debug("Changed book status to 'Reading' for book %s", book.get("name"))
             # Book is already marked as read, and we are also done
             if book.get("status_id") == 3 and progress_percent == 100: 
+                log.debug("Book %s is already marked as 'Read'. No update needed.", book.get("name"))
                 return
             pages = book.get("edition",{}).get("pages",0)
             if pages:
@@ -154,7 +157,9 @@ class HardcoverClient:
                     }
                     if progress_percent == 100:
                         self.change_book_status(book, 3)
+                        log.debug("Changed book status to 'Read' for book %s", book.get("name"))
                     self.execute(query=mutation, variables=variables)
+                    log.debug("Updated reading progress to %d%% for book %s", progress_percent, book.get("name"))
             return
         else:
             return

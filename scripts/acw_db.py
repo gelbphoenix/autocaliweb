@@ -247,10 +247,8 @@ class ACW_DB:
             if setting == "auto_convert_ignored_formats" or setting == "auto_ingest_ignored_formats":
                 result[setting] = ','.join(result[setting])
 
-            if type(result[setting]) == int:
-                self.cur.execute(f"UPDATE acw_settings SET {setting}={result[setting]};")
-            else:
-                self.cur.execute(f'UPDATE acw_settings SET {setting}="{result[setting]}";')
+            # Use parameterized queries to safely handle non-English characters and special characters
+            self.cur.execute(f'UPDATE acw_settings SET {setting}=?;', (result[setting],))
             self.con.commit()
         self.set_default_settings()
 

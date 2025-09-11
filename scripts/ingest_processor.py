@@ -369,9 +369,9 @@ class NewBookProcessor:
             
             gdrive_sync_if_enabled()
 
-            self.fetch_metadata_if_enabled(staged_path.stem)
+            self.fetch_metadata_if_enabled(import_path.stem)
 
-            self.trigger_auto_send_if_enabled(staged_path.stem, book_path)
+            self.trigger_auto_send_if_enabled(import_path.stem, book_path)
 
         except subprocess.CalledProcessError as e:
             print(f"[ingest-processor] {import_path.stem} was not able to be added to the Calibre Library due to the following error:\nCALIBREDB EXIT/ERROR CODE: {e.returncode}\n{e.stderr}", flush=True)

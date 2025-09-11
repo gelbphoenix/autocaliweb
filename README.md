@@ -14,7 +14,8 @@ Autocaliweb is a web app that offers a clean and intuitive interface for browsin
 2. [Features](#features)
 3. [Installation](#installation)
    - [Installation via Docker (recommended)](#installation-via-docker-recommended)
-   - [Manual-Installation - without Docker (on your own risk)](#manual-installation-without-docker-on-your-own-risk)
+   - [Manual installation without Docker (on your own risk)](#manual-installation-without-docker-on-your-own-risk)
+   - [Proxmox VE Script](#proxmox-ve-script)
    - [After Installation](#after-installation)
    - [Deploy Requirements](#deploy-requirements)
 4. [Troubleshooting](#troubleshooting)
@@ -137,6 +138,48 @@ sudo chmod +x ./manual_install_acw.sh && sudo ./manual_install_acw.sh
 
 3. Follow now the next steps that are shown after install_autocaliweb run successfully
 
+### Proxmox VE Script
+
+> [!NOTE]
+> This script was created by and maintained by team of the [Proxmox VE Helper-Scripts](https://community-scripts.github.io/ProxmoxVE/). The page of the script is found [here](https://community-scripts.github.io/ProxmoxVE/scripts?id=autocaliweb) and support for the script is provided by that team.
+
+To install Autocaliweb on Proxmox VE you can also use this script from the Proxmox VE Helper-Scripts:
+
+<details>
+<summary>GitHub</summary>
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/autocaliweb.sh)"
+```
+
+</details>
+
+<details>
+<summary>Gitea (Look on the page for the script for when you have to use this link)</summary>
+
+```bash
+bash -c "$(curl -fsSL https://git.community-scripts.org/community-scripts/ProxmoxVE/raw/branch/main/ct/autocaliweb.sh)"
+```
+
+</details>
+
+You can (and generally should) check and understand external scripts.
+
+### Deploy Requirements
+
+#### For the deployment via docker
+
+- Docker version 27.5.1 (minimum)
+- Docker Compose version 2.33.1 (minimum)
+
+#### For the manual installation
+
+See the requirements [here](https://github.com/gelbphoenix/autocaliweb/wiki/Manual-Installation#prerequisites)
+
+#### For the [Proxmox VE Script](#proxmox-ve-script)
+
+- An updated Proxmox VE install
+
 ## After Installation
 
 1. **Access Autocaliweb**: Open your browser and navigate to: http://localhost:8083 (http://localhost:8083/opds for the OPDS catalog).
@@ -153,11 +196,6 @@ sudo chmod +x ./manual_install_acw.sh && sudo ./manual_install_acw.sh
 4. **Google Drive Integration**: For hosting your Calibre library on Google Drive, refer to the [Google Drive integration guide of Calibre-Web](https://github.com/janeczku/calibre-web/wiki/G-Drive-Setup#using-google-drive-integration).
 
 > [!IMPORTANT] > **If you are migrating from Calibre-Web Automated please ensure that your cwa.db is renamed acw.db before start to load your existing settings**
-
-## Deploy Requirements
-
-- Docker version 27.5.1 (minimum)
-- Docker Compose version 2.33.1 (minimum)
 
 ## Troubleshooting
 

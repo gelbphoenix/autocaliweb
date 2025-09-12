@@ -32,7 +32,7 @@ self.addEventListener("activate", (e) => {
 });
 
 self.addEventListener("fetch", (e) => {
-    if (e.request.mode === "navigate") {
+    if (e.request.mode === "navigate" || e.request.method !== "GET") {
         return;
     }
 

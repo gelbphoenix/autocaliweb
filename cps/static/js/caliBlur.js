@@ -812,14 +812,18 @@ $("#btnGroupDrop1").attr({
 
 if ($("body.epub").length === 0) {
     $(document).ready(function () {
-        $("[data-toggle='tooltip']").tooltip({
-            container: "body",
-            trigger: "hover",
-        });
-        $("[data-toggle-two='tooltip']").tooltip({
-            container: "body",
-            trigger: "hover",
-        });
+        if ($("[data-toggle='tooltip']").length) {
+            $("[data-toggle='tooltip']").tooltip({
+                container: "body",
+                trigger: "hover",
+            });
+        }
+        if ($("[data-toggle-two='tooltip']").length) {
+            $("[data-toggle-two='tooltip']").tooltip({
+                container: "body",
+                trigger: "hover",
+            });
+        }
         $("#btn-upload").attr("title", " ");
     });
 

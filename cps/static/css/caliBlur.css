@@ -1456,6 +1456,18 @@ body
   > div.navbar-collapse.collapse
   > ul
   > li
+  > #top_kosync
+  > .glyphicon-inbox::before {
+  content: "\e028";
+  font-size: 20px;
+}
+
+body
+  > div.navbar.navbar-default.navbar-static-top
+  > div
+  > div.navbar-collapse.collapse
+  > ul
+  > li
   > #top_admin
   > span:last-of-type {
   vertical-align: top;
@@ -12061,8 +12073,9 @@ body.edituser .well {
   padding: 0 !important;
 }
 
-body.me .modal-content,
-body.edituser .modal-content {
+#modal_kobo_token,
+#kobo_tokenModalLabel,
+#generateCoverModal {
   top: 60px;
 }
 

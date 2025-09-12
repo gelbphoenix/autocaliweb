@@ -16,10 +16,12 @@
 #   You should have received a copy of the GNU General Public License
 #   along with this program. If not, see <http://www.gnu.org/licenses/>.
 
+from PIL import Image, ImageDraw, ImageFont
 import os
+import io
 
 try:
-    from wand.image import Image
+    from wand.image import Image as WandImage
     use_IM = True
 except (ImportError, RuntimeError) as e:
     use_IM = False
@@ -34,7 +36,7 @@ def cover_processing(tmp_file_path, img, extension):
     tmp_cover_name = tmp_file_path + '.jpg'
     if extension in NO_JPEG_EXTENSIONS:
         if use_IM:
-            with Image(blob=img) as imgc:
+            with WandImage(blob=img) as imgc:
                 imgc.format = 'jpeg'
                 imgc.transform_colorspace('srgb')
                 imgc.save(filename=tmp_cover_name)
@@ -47,3 +49,43 @@ def cover_processing(tmp_file_path, img, extension):
         return tmp_cover_name
     else:
         return None
+
+class CoverGenerator:
+    def __init__(self, width=1650, height=2200):
+        """Initialize the CoverGenerator with specified dimensions."""
+        self.width = width
+        self.height = height
+    
+    def generate(self, title, author):
+        """Generate a simple cover image with title and author text."""
+        # Create a blank image with white background
+        image = Image.new('RGB', (self.width, self.height), 'white')
+        draw = ImageDraw.Draw(image)
+
+        # Load a standard font
+        # TODO: Make font path configurable
+        try:
+            title_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 94)
+            author_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 72)
+        except OSError:
+            title_font = ImageFont.load_default()
+            author_font = ImageFont.load_default()
+
+        # center and draw the title
+        title_bbox = draw.textbbox((0, 0), title, font=title_font)
+        title_width = title_bbox[2] - title_bbox[0]
+        title_x = (self.width - title_width) / 2
+        draw.text((title_x, self.height / 3), title, fill='black', font=title_font)
+
+        # center and draw the author
+        author_bbox = draw.textbbox((0, 0), author, font=author_font)
+        author_width = author_bbox[2] - author_bbox[0]
+        author_x = (self.width - author_width) / 2
+        draw.text((author_x, self.height / 2), author, fill='black', font=author_font)
+
+        # Convert the image to bytes-stream in JPEG format
+        img_byte_arr = io.BytesIO()
+        image.save(img_byte_arr, format='JPEG')
+        img_byte_arr.seek(0)
+
+        return img_byte_arr

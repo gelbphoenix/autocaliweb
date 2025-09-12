@@ -24,6 +24,7 @@ import os
 from datetime import datetime, timezone
 import json
 from shutil import copyfile
+from werkzeug.datastructures import FileStorage
 
 from markupsafe import escape, Markup  # dependency of flask
 from functools import wraps
@@ -48,6 +49,7 @@ from .redirect import get_redirect_location
 from .file_helper import validate_mime_type
 from .usermanagement import user_login_required, login_required_if_no_ano
 from .string_helper import strip_whitespaces
+from .cover import CoverGenerator
 
 editbook = Blueprint('edit-book', __name__)
 log = logger.create()
@@ -71,6 +73,43 @@ def edit_required(f):
         abort(403)
 
     return inner
+
+
+def generate_cover(book):
+    if not current_user.role_upload():
+        flash(_("User has no rights to generate cover"), category="error")
+        return False
+    
+    try:
+        if not book.title or not book.authors or not book.authors[0].name:
+            log.error("Cannot generate cover: Book title or author missing for book id: %s", book.id)
+            flash(_("Cannot generate cover: Book title or author missing"), category="error")
+            return False
+        
+        calibre_db.create_functions(config)
+        generator = CoverGenerator()
+        img_bytes = generator.generate(book.title, book.authors[0].name)
+
+        img_file = FileStorage(
+            stream=img_bytes,
+            filename='cover.jpg',
+            content_type='image/jpeg'
+        )
+
+        ret, message = helper.save_cover(img_file, book.path)
+        if ret is True:
+            log.debug("Cover generated and saved for book: %s", book.title)
+            book.has_cover = 1
+            calibre_db.session.commit()
+            helper.replace_cover_thumbnail_cache(book.id)
+            return True
+        else:
+            flash(message, category="error")
+            return False
+    except Exception as e:
+        log.error_or_exception("Error generating cover for book id %s: %s", book.id, e)
+        flash(_("Error generating cover: %(error)s", error=e), category="error")
+        return False
 
 
 @editbook.route("/ajax/delete/<int:book_id>", methods=["POST"])
@@ -169,6 +208,23 @@ def upload():
                       category="error")
         return Response(json.dumps({"location": url_for("web.index")}), mimetype='application/json')
     abort(404)
+
+
+@editbook.route("/ajax/generate_cover/<int:book_id>", methods=['POST'])
+@user_login_required
+@upload_required
+def generate_book_cover(book_id):
+    book = calibre_db.get_book(book_id)
+    if not book:
+        flash(_("Error while generating cover: Book not found"), category="error")
+        log.error("Error while generating cover: Book not found for book id: %s", book_id)
+        return redirect(url_for('edit-book.show_edit_book', book_id=book_id))
+    
+    if generate_cover(book):
+        flash(_("Cover generated successfully"), category="success")
+        log.info("Cover generated successfully for book id: %s", book_id)
+    
+    return redirect(url_for('edit-book.show_edit_book', book_id=book_id))
 
 
 @editbook.route("/admin/book/convert/<int:book_id>", methods=['POST'])

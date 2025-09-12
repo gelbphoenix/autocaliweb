@@ -39,7 +39,8 @@ RUN apt-get update && \
       libegl1 libxdamage1 libgl1 \
       libglx-mesa0 xz-utils sqlite3 \
       xdg-utils tzdata inotify-tools \
-      netcat-openbsd binutils zip
+      netcat-openbsd binutils zip \
+      fonts-dejavu-core
 
 # Install S6-Overlay
 RUN export S6_OVERLAY_VERSION=$(curl -s https://api.github.com/repos/just-containers/s6-overlay/releases/latest | awk -F'"' '/tag_name/{print $4;exit}') && \

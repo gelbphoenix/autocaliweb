@@ -118,6 +118,9 @@
       <div class="upload-cover-input-text" id="upload-cover"></div>
       <input id="btn-upload-cover" name="btn-upload-cover" type="file" accept=".jpg, .jpeg, .png, .webp">
     </div>
+    <div class="form-group" aria-label="Generate cover for book">
+      <button type="button" class="btn btn-default" id="generate-cover" data-toggle="modal" data-target="#generateCoverModal">{{ _('Generate Cover for Book') }}</button>
+    </div>
     {% endif %}
     <div class="form-group">
       <label for="rating">{{_('Rating')}}</label>
@@ -227,6 +230,7 @@
 {% block modal %}
 {{ delete_book(current_user.role_delete_books()) }}
 {{ delete_confirm_modal() }}
+{{ generate_cover_modal() }}
 
 <div class="modal fade" id="metaModal" tabindex="-1" role="dialog" aria-labelledby="metaModalLabel">
   <div class="modal-dialog modal-lg" role="document">
@@ -364,6 +368,34 @@
       document.getElementById("keyword").value = `hardcover-id:${e.target.dataset.hardcoverId}`
       document.getElementById("do-search").click()
     })
+</script>
+<script>
+  $(document).ready(() => {
+    $('#confirm-generate-cover').click(() => {
+      $.ajax({
+        type: 'POST',
+        url: "{{ url_for('edit-book.generate_book_cover', book_id=book.id) }}",
+        success: (response) => {
+          if (response.success) {
+            const coImg = document.getElementById('detailcover');
+            let cuSrc = coImg.src;
+            let newSrc;
+            if (cuSrc.includes("?")) {
+              newSrc = cuSrc + "&reload=" + new Date().getTime();
+            } else {
+              newSrc = cuSrc + "?reload=" + new Date().getTime();
+            }
+            coImg.src = newSrc;
+
+            const genButton = document.getElementById('generate-cover');
+            genButton.disabled = true;
+            genButton.innerText = "{{ _('Cover Generated – Click Save to save it') }}";
+          }
+        }
+      });
+      $('#generateCoverModal').modal('hide');
+    })
+  })
 </script>
 <script src="{{ url_for('static', filename='js/libs/typeahead.bundle.js') }}"></script>
 <script src="{{ url_for('static', filename='js/libs/bootstrap-rating-input.min.js') }}"></script>

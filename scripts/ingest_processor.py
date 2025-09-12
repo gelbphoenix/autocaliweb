@@ -124,7 +124,7 @@ class NewBookProcessor:
         self.acw_settings = self.db.acw_settings
         USER_NAME = os.environ.get("ACW_USER", "abc")
         GROUP_NAME = os.environ.get("ACW_GROUP", "abc")
-        owner_group_string = f"{USER_NAME}:{GROUP_NAME}"
+        self.owner_group_string = f"{USER_NAME}:{GROUP_NAME}"
 
         self.auto_convert_on = self.acw_settings['auto_convert']
         self.target_format = self.acw_settings['auto_convert_target_format']
@@ -369,9 +369,9 @@ class NewBookProcessor:
             
             gdrive_sync_if_enabled()
 
-            self.fetch_metadata_if_enabled(staged_path.stem)
+            self.fetch_metadata_if_enabled(import_path.stem)
 
-            self.trigger_auto_send_if_enabled(staged_path.stem, book_path)
+            self.trigger_auto_send_if_enabled(import_path.stem, book_path)
 
         except subprocess.CalledProcessError as e:
             print(f"[ingest-processor] {import_path.stem} was not able to be added to the Calibre Library due to the following error:\nCALIBREDB EXIT/ERROR CODE: {e.returncode}\n{e.stderr}", flush=True)
@@ -502,7 +502,7 @@ class NewBookProcessor:
 
     def set_library_permissions(self):
         try:
-            subprocess.run(["chown", "-R", owner_group_string, self.library_dir], check=True)
+            subprocess.run(["chown", "-R", self.owner_group_string, self.library_dir], check=True)
         except subprocess.CalledProcessError as e:
             print(f"[ingest-processor] An error occurred while attempting to recursively set ownership of {self.library_dir} to owner_group_string. See the following error:\n{e}", flush=True)
 

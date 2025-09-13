@@ -228,9 +228,6 @@ def HandleSyncRequest():
                            .filter(ub.BookShelf.date_added > sync_token.books_last_modified)
                            .filter(db.Data.format.in_(KOBO_FORMATS))
                            .filter(calibre_db.common_filters(allow_show_archived=True))
-                           .order_by(db.Books.last_modified)
-                           .order_by(db.Books.id)
-                           .order_by(ub.ArchivedBook.last_modified)
                            .join(ub.BookShelf, db.Books.id == ub.BookShelf.book_id)
                            .join(ub.Shelf)
                            .filter(ub.Shelf.user_id == current_user.id)
@@ -265,7 +262,8 @@ def HandleSyncRequest():
         changed_entries = (
             shelf_entries
             .union_all(deleted_entries)
-            .order_by(db.Books.id, ub.ArchivedBook.last_modified)
+            .from_self()
+            .order_by(db.Books.id, db.Books.last_modified, ub.ArchivedBook.last_modified)
         )
 
     else:

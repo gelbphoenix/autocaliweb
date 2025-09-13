@@ -29,7 +29,7 @@ from werkzeug.datastructures import FileStorage
 from markupsafe import escape, Markup  # dependency of flask
 from functools import wraps
 
-from flask import Blueprint, request, flash, redirect, url_for, abort, Response
+from flask import Blueprint, request, flash, redirect, url_for, abort, Response, jsonify
 from flask_babel import gettext as _
 from flask_babel import lazy_gettext as N_
 from flask_babel import get_locale
@@ -218,13 +218,20 @@ def generate_book_cover(book_id):
     if not book:
         flash(_("Error while generating cover: Book not found"), category="error")
         log.error("Error while generating cover: Book not found for book id: %s", book_id)
-        return redirect(url_for('edit-book.show_edit_book', book_id=book_id))
+        return jsonify({"success": False, "error": "Book not found"})
     
-    if generate_cover(book):
-        flash(_("Cover generated successfully"), category="success")
-        log.info("Cover generated successfully for book id: %s", book_id)
-    
-    return redirect(url_for('edit-book.show_edit_book', book_id=book_id))
+    try:
+        if generate_cover(book):
+            flash(_("Cover successfully generated"), category="success")
+            log.info("Cover successfully generated for book id: %s", book_id)
+            return jsonify({"success": True})
+        else:
+            log.error("Cover generation failed for book id: %s", book_id)
+            return jsonify({"success": False, "error": "Cover generation failed"})
+    except Exception as e:
+        log.error_or_exception("Error generating cover for book id %s: %s", book_id, e)
+        flash(_("Error generating cover: %(error)s", error=e), category="error")
+        return jsonify({"success": False, "error": str(e)})
 
 
 @editbook.route("/admin/book/convert/<int:book_id>", methods=['POST'])

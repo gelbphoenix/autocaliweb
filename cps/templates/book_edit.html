@@ -377,20 +377,31 @@
         url: "{{ url_for('edit-book.generate_book_cover', book_id=book.id) }}",
         success: (response) => {
           if (response.success) {
+            // Fetch the cover image element
             const coImg = document.getElementById('detailcover');
             let cuSrc = coImg.src;
             let newSrc;
+            
+            // Add an cache-busting query parameter to the URL
             if (cuSrc.includes("?")) {
               newSrc = cuSrc + "&reload=" + new Date().getTime();
             } else {
               newSrc = cuSrc + "?reload=" + new Date().getTime();
             }
+
+            // Update the image source to force reload
             coImg.src = newSrc;
 
+            // Disable the generate cover button and change its text
             const genButton = document.getElementById('generate-cover');
             genButton.disabled = true;
             genButton.innerText = "{{ _('Cover Generated – Click Save to save it') }}";
+          } else {
+            alert("{{ _('Error generating cover:') }} " + (response.error || "{{ _('Unknown error') }}"));
           }
+        },
+        error: () => {
+          alert("{{ _('Error communicating with server') }}");
         }
       });
       $('#generateCoverModal').modal('hide');

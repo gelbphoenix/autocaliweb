@@ -177,7 +177,7 @@ def HandleSyncRequest():
             synced_books_query = ub.session.query(ub.KoboSyncedBooks.book_id).filter(ub.KoboSyncedBooks.user_id == current_user.id)
             synced_books_ids = {item.book_id for item in synced_books_query}
 
-            allowed_books_query = ub.session.query(ub.BookShelf.book_id).join(ub.Shelf, ub.BookShelf.shelf_id == ub.Shelf.id).filter(ub.Shelf.user_id == current_user.id, ub.Shelf.kobo_sync == True)
+            allowed_books_query = ub.session.query(ub.BookShelf.book_id).join(ub.Shelf, ub.BookShelf.id == ub.Shelf.id).filter(ub.Shelf.user_id == current_user.id, ub.Shelf.kobo_sync == True)
             allowed_books_ids = {item.book_id for item in allowed_books_query}
 
             book_ids_to_delete = synced_books_ids - allowed_books_ids

@@ -64,6 +64,8 @@ _This software is a fork of [Calibre-Web](https://github.com/janeczku/calibre-we
 - Support for CLI compatible Calibre plugins
 - Support for syncing with the KOReader document viewer
 - Setting Automerge option
+- Automatically fetch metadata for newly added books
+- Automatically send new books to your E-Reader
 
 ### Features only in Autocaliweb
 
@@ -75,6 +77,7 @@ _This software is a fork of [Calibre-Web](https://github.com/janeczku/calibre-we
 - LitRes as metadata provider
 - Multi email selection for the Send eBooks to E-Readers function
 - Management system for duplicate books
+- Generate generic covers for books
 
 ## Installation
 

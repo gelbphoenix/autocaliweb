@@ -262,7 +262,6 @@ def HandleSyncRequest():
         changed_entries = (
             shelf_entries
             .union_all(deleted_entries)
-            .from_self()
             .order_by(db.Books.id, db.Books.last_modified, ub.ArchivedBook.last_modified)
         )
 

@@ -113,7 +113,7 @@ done
 # Qt6/Kernel compatibility check and possible fix
 #------------------------------------------------------------------------------------------------------------------------
 
-MIN_KERNEL="5.4"
+MIN_KERNEL="6.0"
 HOST_KERNEL_VERSION="$(uname -r)"
 HOST_KERNEL="${HOST_KERNEL_VERSION%%-*}"
 

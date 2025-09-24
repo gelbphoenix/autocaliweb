@@ -761,12 +761,45 @@ def get_book_cover_internal(book, resolution=None):
 
         # Send the book cover thumbnail if it exists in cache
         if resolution:
-            thumbnail = get_book_cover_thumbnail(book, resolution)
-            if thumbnail:
-                cache = fs.FileSystem()
-                if cache.get_cache_file_exists(thumbnail.filename, CACHE_TYPE_THUMBNAILS):
-                    return send_from_directory(cache.get_cache_file_dir(thumbnail.filename, CACHE_TYPE_THUMBNAILS),
-                                               thumbnail.filename)
+            cache = fs.FileSystem()
+            webp_thumbnail = get_book_cover_thumbnail_by_format(book, resolution, 'webp')
+            jpg_thumbnail = get_book_cover_thumbnail_by_format(book, resolution, 'jpg')
+
+            webp_exists = webp_thumbnail and cache.get_cache_file_exists(webp_thumbnail.filename, CACHE_TYPE_THUMBNAILS)
+            jpg_exists = jpg_thumbnail and cache.get_cache_file_exists(jpg_thumbnail.filename, CACHE_TYPE_THUMBNAILS)
+
+            if not webp_exists or not jpg_exists:
+                try:
+                    from flask import has_request_context, request
+                    is_kobo_request = (has_request_context() and request.path and '/kobo/' in request.path)
+
+                    if not is_kobo_request and use_IM:
+                        from .tasks.thumbnail import TaskGenerateCoverThumbnails
+                        thumb_task = TaskGenerateCoverThumbnails(book_id=book.id)
+                        thumb_task.create_book_cover_thumbnails(book)
+
+                        webp_thumbnail = get_book_cover_thumbnail_by_format(book, resolution, 'webp')
+                        jpg_thumbnail = get_book_cover_thumbnail_by_format(book, resolution, 'jpg')
+                        webp_exists = webp_thumbnail and cache.get_cache_file_exists(webp_thumbnail.filename, CACHE_TYPE_THUMBNAILS)
+                        jpg_exists = jpg_thumbnail and cache.get_cache_file_exists(jpg_thumbnail.filename, CACHE_TYPE_THUMBNAILS)
+                except Exception as ex:
+                    log.debug(f'Failed to generate thumbnail on-demand for book {book.id}: {ex}')
+
+            try:
+                from flask import has_request_context, request
+                is_kobo_request = (has_request_context() and request.path and '/kobo/' in request.path)
+
+                if is_kobo_request:
+                    thumb_to_serve = jpg_thumbnail if jpg_exists else (webp_thumbnail if webp_exists else None)
+                else:
+                    thumb_to_serve = webp_thumbnail if webp_exists else (jpg_thumbnail if jpg_exists else None)
+            except:
+                thumb_to_serve = webp_thumbnail if webp_exists else (jpg_thumbnail if jpg_exists else None)
+
+            if thumb_to_serve:
+                return send_from_directory(cache.get_cache_file_dir(thumb_to_serve.filename, CACHE_TYPE_THUMBNAILS),
+                                           thumb_to_serve.filename)
+                                                                       
 
         # Send the book cover from Google Drive if configured
         if config.config_use_google_drive:
@@ -801,6 +834,20 @@ def get_book_cover_thumbnail(book, resolution):
                 .filter(ub.Thumbnail.type == THUMBNAIL_TYPE_COVER)
                 .filter(ub.Thumbnail.entity_id == book.id)
                 .filter(ub.Thumbnail.resolution == resolution)
+                .filter(or_(ub.Thumbnail.expiration.is_(None), ub.Thumbnail.expiration > datetime.now(timezone.utc)))
+                .first())
+    
+
+def get_book_cover_thumbnail_by_format(book, resolution, file_format):
+    """Gets the thumbnail for a specific book, resolution and format (webp/jpg)."""
+
+    if book and book.has_cover:
+        return (ub.session
+                .query(ub.Thumbnail)
+                .filter(ub.Thumbnail.type == THUMBNAIL_TYPE_COVER)
+                .filter(ub.Thumbnail.entity_id == book.id)
+                .filter(ub.Thumbnail.resolution == resolution)
+                .filter(ub.Thumbnail.format == file_format)
                 .filter(or_(ub.Thumbnail.expiration.is_(None), ub.Thumbnail.expiration > datetime.now(timezone.utc)))
                 .first())
 

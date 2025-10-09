@@ -762,44 +762,49 @@ def get_book_cover_internal(book, resolution=None):
         # Send the book cover thumbnail if it exists in cache
         if resolution:
             cache = fs.FileSystem()
-            webp_thumbnail = get_book_cover_thumbnail_by_format(book, resolution, 'webp')
-            jpg_thumbnail = get_book_cover_thumbnail_by_format(book, resolution, 'jpg')
-
-            webp_exists = webp_thumbnail and cache.get_cache_file_exists(webp_thumbnail.filename, CACHE_TYPE_THUMBNAILS)
-            jpg_exists = jpg_thumbnail and cache.get_cache_file_exists(jpg_thumbnail.filename, CACHE_TYPE_THUMBNAILS)
-
+            # Check for both webp and jpg thumbnails, generate missing ones
+            webp_thumb = get_book_cover_thumbnail_by_format(book, resolution, 'webp')
+            jpg_thumb = get_book_cover_thumbnail_by_format(book, resolution, 'jpg')
+            
+            # Check if files actually exist on disk
+            webp_exists = webp_thumb and cache.get_cache_file_exists(webp_thumb.filename, CACHE_TYPE_THUMBNAILS)
+            jpg_exists = jpg_thumb and cache.get_cache_file_exists(jpg_thumb.filename, CACHE_TYPE_THUMBNAILS)
+            
+            # Generate missing thumbnails on-demand (skip for Kobo requests to avoid delays)
             if not webp_exists or not jpg_exists:
                 try:
                     from flask import has_request_context, request
                     is_kobo_request = (has_request_context() and request.path and '/kobo/' in request.path)
-
+                    
                     if not is_kobo_request and use_IM:
                         from .tasks.thumbnail import TaskGenerateCoverThumbnails
-                        thumb_task = TaskGenerateCoverThumbnails(book_id=book.id)
-                        thumb_task.create_book_cover_thumbnails(book)
-
-                        webp_thumbnail = get_book_cover_thumbnail_by_format(book, resolution, 'webp')
-                        jpg_thumbnail = get_book_cover_thumbnail_by_format(book, resolution, 'jpg')
-                        webp_exists = webp_thumbnail and cache.get_cache_file_exists(webp_thumbnail.filename, CACHE_TYPE_THUMBNAILS)
-                        jpg_exists = jpg_thumbnail and cache.get_cache_file_exists(jpg_thumbnail.filename, CACHE_TYPE_THUMBNAILS)
+                        # Create and run thumbnail generation for this book
+                        thumbnail_task = TaskGenerateCoverThumbnails(book_id=book.id)
+                        thumbnail_task.create_book_cover_thumbnails(book)
+                        
+                        # Refresh thumbnail references after generation
+                        webp_thumb = get_book_cover_thumbnail_by_format(book, resolution, 'webp')
+                        jpg_thumb = get_book_cover_thumbnail_by_format(book, resolution, 'jpg')
+                        webp_exists = webp_thumb and cache.get_cache_file_exists(webp_thumb.filename, CACHE_TYPE_THUMBNAILS)
+                        jpg_exists = jpg_thumb and cache.get_cache_file_exists(jpg_thumb.filename, CACHE_TYPE_THUMBNAILS)
                 except Exception as ex:
                     log.debug(f'Failed to generate thumbnail on-demand for book {book.id}: {ex}')
-
+            
+            # Determine which thumbnail format to serve based on request context
             try:
                 from flask import has_request_context, request
                 is_kobo_request = (has_request_context() and request.path and '/kobo/' in request.path)
-
+                
+                # Prefer jpg for Kobo requests, webp for web requests
                 if is_kobo_request:
-                    thumb_to_serve = jpg_thumbnail if jpg_exists else (webp_thumbnail if webp_exists else None)
+                    thumbnail_to_serve = jpg_thumb if jpg_exists else (webp_thumb if webp_exists else None)
                 else:
-                    thumb_to_serve = webp_thumbnail if webp_exists else (jpg_thumbnail if jpg_exists else None)
+                    thumbnail_to_serve = webp_thumb if webp_exists else (jpg_thumb if jpg_exists else None)
             except:
-                thumb_to_serve = webp_thumbnail if webp_exists else (jpg_thumbnail if jpg_exists else None)
-
-            if thumb_to_serve:
-                return send_from_directory(cache.get_cache_file_dir(thumb_to_serve.filename, CACHE_TYPE_THUMBNAILS),
-                                           thumb_to_serve.filename)
-                                                                       
+                # Fallback if we can't determine request context
+                thumbnail_to_serve = webp_thumb if webp_exists else (jpg_thumb if jpg_exists else None)
+            if thumbnail_to_serve:
+                return send_from_directory(cache.get_cache_file_dir(thumbnail_to_serve.filename, CACHE_TYPE_THUMBNAILS), thumbnail_to_serve.filename)
 
         # Send the book cover from Google Drive if configured
         if config.config_use_google_drive:

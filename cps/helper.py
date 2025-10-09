@@ -843,7 +843,7 @@ def get_book_cover_thumbnail(book, resolution):
                 .first())
     
 
-def get_book_cover_thumbnail_by_format(book, resolution, file_format):
+def get_book_cover_thumbnail_by_format(book, resolution, format):
     """Gets the thumbnail for a specific book, resolution and format (webp/jpg)."""
 
     if book and book.has_cover:
@@ -852,7 +852,7 @@ def get_book_cover_thumbnail_by_format(book, resolution, file_format):
                 .filter(ub.Thumbnail.type == THUMBNAIL_TYPE_COVER)
                 .filter(ub.Thumbnail.entity_id == book.id)
                 .filter(ub.Thumbnail.resolution == resolution)
-                .filter(ub.Thumbnail.format == file_format)
+                .filter(ub.Thumbnail.format == format)
                 .filter(or_(ub.Thumbnail.expiration.is_(None), ub.Thumbnail.expiration > datetime.now(timezone.utc)))
                 .first())
 

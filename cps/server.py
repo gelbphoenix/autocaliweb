@@ -236,9 +236,6 @@ class WebServer(object):
                 self.unix_socket_file = None
 
     def _start_tornado(self):
-        if os.name == 'nt' and sys.version_info > (3, 7):
-            import asyncio
-            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
         try:
             # Max Buffersize set to 200MB
             http_server = HTTPServer(MyWSGIContainer(self.app),

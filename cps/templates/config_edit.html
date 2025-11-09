@@ -340,6 +340,10 @@
         {% endif %}
         {% if 'generic' == prov['provider_name'] %}
           <div class="form-group">
+            <label for="config_oauth_auto_redirect">{{_('Auto-redirect to OAuth Provider')}}</label>
+            <input type="checkbox" name="config_oauth_auto_redirect" id="config_oauth_auto_redirect" {% if config.config_oauth_auto_redirect %}checked{% endif %}>
+          </div>
+          <div class="form-group">
             <label for="config_{{ prov['id'] }}_metadata_url">{{_('%(provider)s OAuth Metadata URL', provider=prov['provider_name'])}}</label>
             <input type="text" class="form-control" id="config_{{ prov['id'] }}_metadata_url" name="config_{{ prov['id'] }}_metadata_url" value="{% if prov['metadata_url']%}{{ prov['metadata_url'] }}{% endif %}" autocomplete="off">
           </div>

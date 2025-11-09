@@ -1491,6 +1491,10 @@ def render_login(username="", password=""):
 def login():
     if current_user is not None and current_user.is_authenticated:
         return redirect(url_for('web.index'))
+    
+    if (config.config_oauth_auto_redirect and 3 in oauth_check):
+        return redirect(url_for('generic.login'))
+    
     if config.config_login_type == constants.LOGIN_LDAP and not services.ldap:
         log.error(u"Cannot activate LDAP authentication")
         flash(_(u"Cannot activate LDAP authentication"), category="error")

@@ -1920,6 +1920,7 @@ def _configuration_update_helper():
         # OAuth configuration
         if config.config_login_type == constants.LOGIN_OAUTH:
             reboot_required |= _configuration_oauth_helper(to_save)
+            _config_checkbox(to_save, "config_oauth_auto_redirect")
 
         # logfile configuration
         reboot, message = _configuration_logfile_helper(to_save)

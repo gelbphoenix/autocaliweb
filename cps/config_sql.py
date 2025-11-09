@@ -124,6 +124,7 @@ class _Settings(_Base):
     config_register_email = Column(Boolean, default=False)
     config_login_type = Column(Integer, default=0)
     config_oauth_manual_urls = Column(Integer, default=0)
+    config_oauth_auto_redirect = Column(Boolean, default=False)
 
     config_kobo_proxy = Column(Boolean, default=False)
 

@@ -3681,3 +3681,7 @@ msgstr ""
 #: cps/admin.py:680
 msgid "Are you sure you want to change Instapaper Integration behavior for the selected user(s)?"
 msgstr ""
+
+#: cps/templates/config_edit.html:343
+msgid "Auto-redirect to OAuth Provider"
+msgstr ""

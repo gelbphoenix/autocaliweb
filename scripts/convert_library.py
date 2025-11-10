@@ -90,11 +90,11 @@ class LibraryConverter:
         self.convert_ignored_formats = self.acw_settings['auto_convert_ignored_formats']
         self.kindle_epub_fixer = self.acw_settings['kindle_epub_fixer']
 
-        self.supported_book_formats = {'azw', 'azw3', 'azw4', 'cbz', 'cbr', 'cb7', 'cbc', 'chm', 'djvu', 'docx', 'epub', 'fb2', 'fbz', 'html', 'htmlz', 'lit', 'lrf', 'mobi', 'odt', 'pdf', 'prc', 'pdb', 'pml', 'rb', 'rtf', 'snb', 'tcr', 'txt', 'txtz'}
-        self.hierarchy_of_success = {'epub', 'lit', 'mobi', 'azw', 'azw3', 'fb2', 'fbz', 'azw4', 'prc', 'odt', 'lrf', 'pdb',  'cbz', 'pml', 'rb', 'cbr', 'cb7', 'cbc', 'chm', 'djvu', 'snb', 'tcr', 'pdf', 'docx', 'rtf', 'html', 'htmlz', 'txtz', 'txt'}
+        self.supported_book_formats = {'azw', 'azw3', 'azw4', 'cbz', 'cbr', 'cb7', 'cbc', 'cbt', 'chm', 'djvu', 'docx', 'epub', 'fb2', 'fbz', 'html', 'htmlz', 'lit', 'lrf', 'mobi', 'odt', 'pdf', 'prc', 'pdb', 'pml', 'rb', 'rtf', 'snb', 'tcr', 'txt', 'txtz'}
+        self.hierarchy_of_success = {'epub', 'lit', 'mobi', 'azw', 'azw3', 'fb2', 'fbz', 'azw4', 'prc', 'odt', 'lrf', 'pdb', 'cbz', 'pml', 'rb', 'cbr', 'cb7', 'cbc', 'cbt', 'chm', 'djvu', 'snb', 'tcr', 'pdf', 'docx', 'rtf', 'html', 'htmlz', 'txtz', 'txt'}
 
         self.current_book = 1
-        self.ingest_folder, self.library_dir, self.tmp_conversion_dir = self.get_dirs(os.path.join(os.environ.get("ACW_INSTALL_DIR", "/app/autocaliweb"), "dirs.json")) 
+        self.ingest_folder, self.library_dir, self.tmp_conversion_dir = self.get_dirs(os.path.join(os.environ.get("ACW_INSTALL_DIR", "/app/autocaliweb"), "dirs.json"))
 
         self.calibre_env = os.environ.copy()
         self.calibre_env["HOME"] = os.environ.get("ACW_CONFIG_DIR", "/config")
@@ -103,10 +103,21 @@ class LibraryConverter:
         if self.split_library:
             self.library_dir = self.split_library['split_path']
             self.calibre_env["CALIBRE_OVERRIDE_DATABASE_PATH"] = os.path.join(self.split_library['db_path'], 'metadata.db')
-        
+
         self.to_convert = self.get_books_to_convert()
 
     def get_split_library(self) -> dict[str, str] | None:
+        """
+        Check if Calibre split library configuration is enabled.
+
+        Queries the app.db settings table to determine if the user has configured
+        a split library setup where book files are stored separately from the database.
+
+        Returns:
+            dict[str, str] | None: Dictionary with 'split_path' (book storage location)
+                                   and 'db_path' (database location) if split library is
+                                   enabled, None otherwise.
+        """
         con = sqlite3.connect(os.path.join(os.environ.get("ACW_CONFIG_DIR", "/config"), "app.db"))
         cur = con.cursor()
         split_library = cur.execute("SELECT config_calibre_split FROM settings;").fetchone()[0]
@@ -124,6 +135,19 @@ class LibraryConverter:
             return None
 
     def get_dirs(self, dirs_json_path: str) -> tuple[str, str, str]:
+        """
+        Load directory paths from the dirs.json configuration file.
+
+        Args:
+            dirs_json_path: Absolute path to the dirs.json configuration file.
+
+        Returns:
+            tuple[str, str, str]: A tuple containing:
+                - ingest_folder: Path to the book ingest directory (with trailing slash)
+                - library_dir: Path to the Calibre library directory (with trailing slash)
+                - tmp_conversion_dir: Path to temporary conversion directory (with trailing slash)
+        """
+
         dirs = {}
         with open(dirs_json_path, 'r') as f:
             dirs: dict[str, str] = json.load(f)
@@ -133,7 +157,7 @@ class LibraryConverter:
         tmp_conversion_dir = f"{dirs['tmp_conversion_dir']}/"
 
         return ingest_folder, library_dir, tmp_conversion_dir
-    
+
 
     def get_library_book_formats(self) -> dict[int, list[str]]:
         """Returns a dictionary of formats for all books in the library.
@@ -200,6 +224,18 @@ class LibraryConverter:
 
 
     def backup(self, input_file, backup_type):
+        """
+        Copy a file to the appropriate backup destination directory.
+
+        Args:
+            input_file: Path to the file to be backed up.
+            backup_type: Type of backup ('converted', 'imported', or 'failed')
+                        determining the destination subdirectory in /config/processed_books/.
+
+        Note:
+            Errors during backup are logged but do not halt execution.
+        """
+
         try:
             output_path = backup_destinations[backup_type]
             shutil.copy2(input_file, output_path)
@@ -208,6 +244,21 @@ class LibraryConverter:
 
 
     def convert_library(self):
+        """
+        Convert all eligible books in the Calibre library to the target format.
+
+        Iterates through books identified by get_books_to_convert(), converting each
+        to the configured target format using ebook-convert or kepubify. Handles:
+        - Format conversion with optional EPUB fixing
+        - Backup of original files if configured
+        - Import of converted files back to the library
+        - Database logging of conversions and imports
+        - Permission setting and cleanup after each book
+
+        The conversion process respects user-configured ignored formats and handles
+        multi-step conversions for kepub targets.
+        """
+
         for file in self.to_convert:
             filename = os.path.basename(file)
             file_extension = Path(file).suffix
@@ -341,7 +392,7 @@ class LibraryConverter:
             except subprocess.CalledProcessError as e:
                 print_and_log(f"[convert-library]: ({self.current_book}/{len(self.to_convert)}) Intermediate conversion of {os.path.basename(filepath)} to epub was unsuccessful. Cancelling kepub conversion and moving on to next file. See the following error:\n{e}")
                 return False, ""
-            
+
         if epub_ready:
             epub_filepath = Path(epub_filepath)
             target_filepath = f"{self.tmp_conversion_dir}{epub_filepath.stem}.kepub"
@@ -377,6 +428,14 @@ class LibraryConverter:
 
 
     def empty_tmp_con_dir(self):
+        """
+        Remove all files from the temporary conversion directory.
+
+        Cleans up temporary files created during the conversion process.
+        Only removes files, not subdirectories. Errors are logged but do not
+        halt execution.
+        """
+
         try:
             files = os.listdir(self.tmp_conversion_dir)
             for file in files:
@@ -388,9 +447,17 @@ class LibraryConverter:
 
 
     def set_library_permissions(self):
+        """
+        Recursively set ownership of library files to abc:abc.
+
+        Ensures all files in the Calibre library directory are owned by the
+        configured user and group default: (abc:abc) for proper access permissions.
+        Errors are logged but do not halt execution.
+        """
+
         try:
             subprocess.run(["chown", "-R", owner_group_string, self.library_dir], check=True)
-            print_and_log(f"[convert-library]: ({self.current_book}/{len(self.to_convert)}) Successfully set ownership of new files in {self.library_dir} to owner_group_string.")
+            print_and_log(f"[convert-library]: ({self.current_book}/{len(self.to_convert)}) Successfully set ownership of new files in {self.library_dir} to {owner_group_string}.")
         except subprocess.CalledProcessError as e:
             print_and_log(f"[convert-library]: ({self.current_book}/{len(self.to_convert)}) An error occurred while attempting to recursively set ownership of {self.library_dir} to owner_group_string. See the following error:\n{e}")
 

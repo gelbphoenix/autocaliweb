@@ -13,6 +13,29 @@ from acw_db import ACW_DB
 from kindle_epub_fixer import EPUBFixer
 import audiobook
 
+from cps import cli_param, db, config_sql, ub
+from cps.constants import CONFIG_DIR, DEFAULT_GDRIVE_FILE
+
+# Initialize cli_param
+cli_param.gd_path = os.path.join(CONFIG_DIR, DEFAULT_GDRIVE_FILE)
+cli_param.settings_path = os.path.join(CONFIG_DIR, 'app.db')
+
+# Initialize the user database
+ub.init_db(cli_param.settings_path)
+
+# Get encryption key and load configuration
+encrypt_key, error = config_sql.get_encryption_key(os.path.dirname(cli_param.settings_path))
+config_sql.load_configuration(ub.session, encrypt_key)
+
+# Get the config object
+from cps import config
+
+# Initialize the config object
+config.init_config(ub.session, encrypt_key, cli_param)
+
+# Update CalibreDB with the configuration
+db.CalibreDB.update_config(config, config.config_calibre_dir, cli_param.settings_path)
+
 # Optional: enable GDrive sync and auto-send by importing cps modules when available
 _GDRIVE_AVAILABLE = False
 _CPS_AVAILABLE = False
@@ -28,35 +51,47 @@ try:
     cps_path = os.path.dirname(os.path.dirname(__file__))
     if cps_path not in sys.path:
         sys.path.append(cps_path)
-    
-    # Import GDrive functionality
-    try:
-        from cps import gdriveutils as _gdriveutils, config as _cps_config
-        _GDRIVE_AVAILABLE = True
-        print("[ingest-processor] GDrive functionality available", flush=True)
-    except ImportError as e:
-        print(f"[ingest-processor] GDrive functionality not available: {e}", flush=True)
-        _gdriveutils = None
-        _cps_config = None
-
-    # Import auto-send and metadata functionality
-    try:
-        from cps.metadata_helper import fetch_and_apply_metadata
-        from cps.tasks.auto_send import TaskAutoSend
-        from cps.services.worker import WorkerThread
-        from cps import ub as _ub
-        _CPS_AVAILABLE = True
-        print("[ingest-processor] Auto-send and metadata functionality available", flush=True)
-    except ImportError as e:
-        print(f"[ingest-processor] Auto-send/metadata functionality not available: {e}", flush=True)
-        fetch_and_apply_metadata = None
-        TaskAutoSend = None
-        WorkerThread = None
-        _ub = None
-
 except Exception as e:
-    print(f"[ingest-processor] WARN: Unexpected error during CPS module import: {e}", flush=True)
+    print(f"[ingest-processor] Fatal error during path setup: {e}", flush=True)
+    sys.exit(1)
+
+# Import GDrive functionality
+try:
+    from cps import gdriveutils as _gdriveutils, config as _cps_config
+    _GDRIVE_AVAILABLE = True
+    print("[ingest-processor] GDrive functionality available", flush=True)
+except ImportError as e:
+    print(f"[ingest-processor] GDrive functionality not available: {e}", flush=True)
+    _gdriveutils = None
+    _cps_config = None
     _GDRIVE_AVAILABLE = False
+except Exception as e:
+    print(f"[ingest-processor] WARN: Unexpected error during GDrive module import: {e}", flush=True)
+    _gdriveutils = None
+    _cps_config = None
+    _GDRIVE_AVAILABLE = False
+
+# Import auto-send and metadata functionality
+try:
+    from cps.metadata_helper import fetch_and_apply_metadata
+    from cps.tasks.auto_send import TaskAutoSend
+    from cps.services.worker import WorkerThread
+    from cps import ub as _ub
+    _CPS_AVAILABLE = True
+    print("[ingest-processor] Auto-send and metadata functionality available", flush=True)
+except ImportError as e:
+    print(f"[ingest-processor] Auto-send/metadata functionality not available: {e}", flush=True)
+    fetch_and_apply_metadata = None
+    TaskAutoSend = None
+    WorkerThread = None
+    _ub = None
+    _CPS_AVAILABLE = False
+except Exception as e:
+    print(f"[ingest-processor] WARN: Unexpected error during CPS core module import: {e}", flush=True)
+    fetch_and_apply_metadata = None
+    TaskAutoSend = None
+    WorkerThread = None
+    _ub = None
     _CPS_AVAILABLE = False
 
 def gdrive_sync_if_enabled():
@@ -80,6 +115,12 @@ except FileExistsError:
 
 # Defining function to delete the lock on script exit
 def removeLock():
+    """
+    Purpose: Remove lock file on script exit.
+
+    This function is intended to be called automatically via the atexit module
+    to ensure the cleanup of the script's lock file upon termination.
+    """
     os.remove(tempfile.gettempdir() + '/ingest_processor.lock')
 
 # Will automatically run when the script exits
@@ -99,7 +140,7 @@ def wait_for_file_stable(filepath, stable_seconds=5, timeout=120):
     start_time = time.time()
 
     while True:
-        try: 
+        try:
             current_size = os.path.getsize(filepath)
         except FileNotFoundError:
             current_size = -1
@@ -115,7 +156,7 @@ def wait_for_file_stable(filepath, stable_seconds=5, timeout=120):
 
         if time.time() - start_time > timeout:
             raise TimeoutError(f"File {filepath} did not stabilize within {timeout} seconds.")
-            
+
         time.sleep(1)
 
 class NewBookProcessor:
@@ -133,21 +174,23 @@ class NewBookProcessor:
         if isinstance(self.ingest_ignored_formats, str):
             self.ingest_ignored_formats = [self.ingest_ignored_formats]
 
-        for tmp_ext in ("crdownload", "download", "part", "uploading", "temp"):
+        for tmp_ext in (".crdownload", ".download", ".part", ".uploading", ".temp", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"):
             if tmp_ext not in self.ingest_ignored_formats:
-                self.ingest_ignored_formats.extend(tmp_ext)
+                # FIX: Replaced .extend() with .append() to correctly add the full string
+                # instead of individual characters.
+                self.ingest_ignored_formats.append(tmp_ext)
 
         self.convert_ignored_formats = self.acw_settings['auto_convert_ignored_formats']
         self.is_kindle_epub_fixer = self.acw_settings['kindle_epub_fixer']
 
-        self.supported_book_formats = {'azw', 'azw3', 'azw4', 'cbz', 'cbr', 'cb7', 'cbc', 'chm', 'djvu', 'docx', 'epub', 'fb2', 'fbz', 'html', 'htmlz', 'lit', 'lrf', 'mobi', 'odt', 'pdf', 'prc', 'pdb', 'pml', 'rb', 'rtf', 'snb', 'tcr', 'txtz', 'txt', 'kepub'}
+        self.supported_book_formats = {'azw', 'azw3', 'azw4', 'cbz', 'cbr', 'cb7', 'cbc', 'chm', 'djvu', 'docx', 'epub', 'fb2', 'fbz', 'html', 'htmlz', 'lit', 'lrf', 'mobi', 'odt', 'pdf', 'prc', 'pdb', 'pml', 'rb', 'rtf', 'snb', 'tcr', 'txtz', 'txt', 'kepub', 'cbt'}
         self.hierarchy_of_success = {'epub', 'lit', 'mobi', 'azw', 'epub', 'azw3', 'fb2', 'fbz', 'azw4',  'prc', 'odt', 'lrf', 'pdb',  'cbz', 'pml', 'rb', 'cbr', 'cb7', 'cbc', 'chm', 'djvu', 'snb', 'tcr', 'pdf', 'docx', 'rtf', 'html', 'htmlz', 'txtz', 'txt'}
-        self.supported_audiobook_formats = {'m4a', 'm4b', 'mp4'}
+        self.supported_audiobook_formats = {'m4a', 'm4b', 'mp4', 'mp3', 'flac', 'ogg', 'wav', 'opus', 'aac', 'aiff', 'asf', 'ogv'}
         self.ingest_folder, self.library_dir, self.tmp_conversion_dir = self.get_dirs(os.path.join(os.environ.get("ACW_INSTALL_DIR", "/app/autocaliweb"), "dirs.json"))
 
         # Create the tmp_conversion_dir if it does not already exist
         Path(self.tmp_conversion_dir).mkdir(exist_ok=True)
-        
+
         self.filepath = filepath # path of the book we're targeting
         self.filename = os.path.basename(filepath)
         self.is_target_format = bool(self.filepath.endswith(self.target_format))
@@ -162,6 +205,19 @@ class NewBookProcessor:
             self.calibre_env["CALIBRE_OVERRIDE_DATABASE_PATH"] = os.path.join(self.split_library['db_path'], 'metadata.db')
 
     def get_split_library(self) -> dict[str, str] | None:
+        """
+        Purpose: Check if the Calibre split library configuration is enabled in the app database.
+
+        :returns: A dictionary with keys 'split_path' (the separate library directory path)
+                  and 'db_path' (the path to the directory holding metadata.db) if split
+                  library is enabled, otherwise None.
+
+        Database queries performed:
+        - SELECT config_calibre_split FROM settings;
+        - SELECT config_calibre_split_dir FROM settings;
+        - SELECT config_calibre_dir FROM settings;
+        All queries are performed against the 'app.db' configuration database.
+        """
         con = sqlite3.connect(os.path.join(os.environ.get("ACW_CONFIG_DIR", "/config"), "app.db"))
         cur = con.cursor()
         split_library = cur.execute("SELECT config_calibre_split FROM settings;").fetchone()[0]
@@ -179,6 +235,12 @@ class NewBookProcessor:
             return None
 
     def get_dirs(self, dirs_json_path: str) -> tuple[str, str, str]:
+        """
+        Purpose: Load directory paths (ingest, library, temporary conversion) from a configuration JSON file.
+
+        :param dirs_json_path: The absolute path to the dirs.json configuration file.
+        :returns: A tuple of (ingest_folder, library_dir, tmp_conversion_dir) paths.
+        """
         dirs = {}
         with open(dirs_json_path, 'r') as f:
             dirs: dict[str, str] = json.load(f)
@@ -198,8 +260,13 @@ class NewBookProcessor:
         if input_format in self.supported_book_formats:
             can_convert = True
         return can_convert, input_format
-    
+
     def is_supported_audiobook(self) -> bool:
+        """
+        Purpose: Check if the file's extension matches a supported audiobook format.
+
+        :returns: True if the file format is in self.supported_audiobook_formats, False otherwise.
+        """
         input_format = Path(self.filepath).suffix[1:]
         if input_format in self.supported_audiobook_formats:
             return True
@@ -207,6 +274,12 @@ class NewBookProcessor:
             return False
 
     def backup(self, input_file, backup_type):
+        """
+        Purpose: Copy the file to the appropriate backup directory configured in Autocaliweb.
+
+        :param input_file: The absolute path to the file to be backed up.
+        :param backup_type: The category of backup, e.g., 'converted', 'imported', or 'failed'.
+        """
         try:
             output_path = backup_destinations[backup_type]
         except Exception as e:
@@ -218,7 +291,11 @@ class NewBookProcessor:
 
 
     def convert_book(self, end_format=None) -> tuple[bool, str]:
-        """Uses the following terminal command to convert the books provided using the calibre converter tool:\n\n--- ebook-convert myfile.input_format myfile.output_format\n\nAnd then saves the resulting files to the autocaliweb import folder."""
+        """Uses the following terminal command to convert the books provided using the calibre converter tool:
+
+        --- ebook-convert myfile.input_format myfile.output_format
+
+        And then saves the resulting files to the autocaliweb import folder."""
         print(f"[ingest-processor]: Starting conversion process for {self.filename}...", flush=True)
         print(f"[ingest-processor]: Converting file from {self.input_format} to {self.target_format} format...\n", flush=True)
         print(f"\n[ingest-processor]: START_CON: Converting {self.filename}...\n", flush=True)
@@ -239,9 +316,9 @@ class NewBookProcessor:
                 self.backup(self.filepath, backup_type="converted")
 
             self.db.conversion_add_entry(original_filepath.stem,
-                                        self.input_format,
-                                        self.target_format,
-                                        str(self.acw_settings["auto_backup_conversions"]))
+                                         self.input_format,
+                                         self.target_format,
+                                         str(self.acw_settings["auto_backup_conversions"]))
 
             return True, target_filepath
 
@@ -262,8 +339,8 @@ class NewBookProcessor:
             print("\n[ingest-processor]: *** NOTICE TO USER: Kepubify is limited in that it can only convert from epubs. To get around this, ACW will automatically convert other"
             "supported formats to epub using the Calibre's conversion tools & then use Kepubify to produce your desired kepubs. Obviously multi-step conversions aren't ideal"
             "so if you notice issues with your converted files, bare in mind starting with epubs will ensure the best possible results***\n", flush=True)
-            convert_successful, converted_filepath = self.convert_book(self.input_format, end_format="epub") # type: ignore
-            
+            convert_successful, converted_filepath = self.convert_book(end_format="epub") # type: ignore
+
         if convert_successful:
             converted_filepath = Path(converted_filepath)
             target_filepath = f"{self.tmp_conversion_dir}{converted_filepath.stem}.kepub"
@@ -273,9 +350,9 @@ class NewBookProcessor:
                     self.backup(self.filepath, backup_type="converted")
 
                 self.db.conversion_add_entry(converted_filepath.stem,
-                                            self.input_format,
-                                            self.target_format,
-                                            str(self.acw_settings["auto_backup_conversions"]))
+                                             self.input_format,
+                                             self.target_format,
+                                             str(self.acw_settings["auto_backup_conversions"]))
 
                 return True, target_filepath
 
@@ -299,34 +376,34 @@ class NewBookProcessor:
                 # Likely a transient or temporary file that was renamed before we processed cleanup
                 print(f"[ingest-processor]: Skipping delete; file already gone: {self.filepath}", flush=True)
                 return
-            
+
             parent_dir = os.path.dirname(self.filepath)
             if os.path.isdir(parent_dir) and os.path.exists(parent_dir):
                 try:
-                    if os.path.exists(self.ingest_folder) and os.path.normpath(parent_dir) != self.ingest_folder:
+                    if os.path.exists(self.ingest_folder) and os.path.normpath(parent_dir) != os.path.normpath(self.ingest_folder):
                         subprocess.run(["find", f"{parent_dir}", "-type", "d", "-empty", "-delete"], check=True)
                 except Exception as e:
                     print(f"[ingest-processor]: WARN: Failed pruning empty folders for {parent_dir}: {e}", flush=True)
-        
+
         except Exception as e:
             print(f"[ingest-processor]: WARN: Failed to delete processed file {self.filepath}: {e}", flush=True)
 
 
     def add_book_to_library(self, book_path:str, text: bool=True, format: str="text") -> None:
-        if self.target_format == "epub" and self.is_kindle_epub_fixer:
+        if text and self.target_format == "epub" and self.is_kindle_epub_fixer and book_path.endswith('.epub'):
             self.run_kindle_epub_fixer(book_path, dest=self.tmp_conversion_dir)
             fixed_epub_path = Path(self.tmp_conversion_dir) / os.path.basename(book_path)
             try:
                 if Path(fixed_epub_path).exists():
                     book_path = str(fixed_epub_path)
             except OSError as e:
-                if e.errno == 36:  # File name too long
+                if e.errno == 36: # File name too long
                     print(f"[ingest-processor] The file name {os.path.basename(book_path)} is too long for the filesystem. Please rename the file to a shorter name and try again.", flush=True)
                     return
                 else:
                     print(f"[ingest-processor] An error occurred while processing {os.path.basename(book_path)} with the kindle-epub-fixer. See the following error:\n{e}", flush=True)
                     raise
-        
+
         if not os.path.exists(book_path):
             print(f"[ingest-processor]: The file {book_path} does not exist. Skipping import.", flush=True)
             return
@@ -339,34 +416,60 @@ class NewBookProcessor:
                 subprocess.run(["calibredb", "add", book_path, "--automerge", self.acw_settings['auto_ingest_automerge'], f"--library-path={self.library_dir}"], env=self.calibre_env, check=True)
                 print(f"[ingest-processor] Added {import_path.stem} to Calibre database", flush=True)
             else:
-                meta = audiobook.get_audio_file_info(book_path, format, os.path.basename(book_path), False)
+                meta = None
+                try:
+                    # Wrap in try/except to prevent silent failure
+                    meta = audiobook.get_audio_file_info(book_path, format, os.path.basename(book_path), False)
+                except Exception as e:
+                    # Log the exception and proceed with an empty metadata object
+                    print(f"[ingest-processor]: Error extracting audiobook metadata for {os.path.basename(book_path)}: {e}", flush=True)
+                    meta = {}
+
                 identifiers = ""
                 if len(meta[12]) != 0:
                     for i in meta[12]:
                         identifiers = identifiers + " " + i
+                # Build the base command
+                calibredb_args = [
+                    "calibredb", "add",
+                    "--automerge", str(self.acw_settings.get('auto_ingest_automerge', 'new_record')),
+                ]
+                # Append metadata field only if avaliable
+                if meta[2]:
+                    calibredb_args += ["--title", meta[2]]
+                if meta[3]:
+                    calibredb_args += ["--authors", meta[3]]
+                if meta[4]:
+                    calibredb_args += ["--cover", meta[4]]
+                if meta[6]:
+                    calibredb_args += ["--tags", meta[6]]
+                if meta[7]:
+                    calibredb_args += ["--series", meta[7]]
+                if meta[8]:
+                    calibredb_args += ["--series-index", meta[8]]
+                if meta[9]:
+                    calibredb_args += ["--language", meta[9]]
 
-                subprocess.run(
-                    [
-                        "calibredb", "add", book_path, "--automerge", self.acw_settings['auto_ingest_automerge'], 
-                        "--title", meta[2], 
-                        "--authors", meta[3], 
-                        "--cover", meta[4], 
-                        "--tags", meta[6], 
-                        "--series", meta[7], 
-                        "--series_index", meta[8], 
-                        "--language", meta[9], 
-                        "identifiers", identifiers, 
-                        f"--library-path={self.library_dir}"
-                    ], 
-                    check=True
-                )
+                # identifiers may be a pre-built string or dict - convert accordingly
+                if identifiers:
+                    # if identifiers is dict -> "scheme:id,scheme2:id2"
+                    if isinstance(identifiers, dict):
+                        id_str = ",".join(f"{k}:{v}" for k, v in identifiers.items() if v)
+                        if id_str:
+                            calibredb_args += ["--identifiers", id_str]
+                    else:
+                        calibredb_args += ["--identifiers", str(identifiers)]
+                # book_path shoud placed at the end
+                calibredb_args.extend([f"--library-path={self.library_dir}", book_path])
+
+                subprocess.run(calibredb_args , env=self.calibre_env, check=True)
 
             if self.acw_settings['auto_backup_imports']:
                 self.backup(book_path, backup_type="imported")
 
             self.db.import_add_entry(import_path.stem,
-                                    str(self.acw_settings["auto_backup_imports"]))
-            
+                                     str(self.acw_settings["auto_backup_imports"]))
+
             gdrive_sync_if_enabled()
 
             self.fetch_metadata_if_enabled(import_path.stem)
@@ -381,6 +484,14 @@ class NewBookProcessor:
 
 
     def run_kindle_epub_fixer(self, filepath:str, dest=None) -> None:
+        """
+        Purpose: Process an EPUB file with the Kindle EPUB fixer (EPUBFixer) to ensure
+        better rendering on Kindle devices.
+
+        :param filepath: The path to the EPUB file to be processed.
+        :param dest: The output directory for the processed EPUB file (optional).
+                     Defaults to None, which lets the EPUBFixer manage the output path.
+        """
         try:
             EPUBFixer().process(input_path=filepath, output_path=dest)
             print(f"[ingest-processor] {os.path.basename(filepath)} successfully processed with the acw-kindle-epub-fixer!")
@@ -393,35 +504,47 @@ class NewBookProcessor:
         if not _CPS_AVAILABLE:
             print("[ingest-processor] CPS modules not available, skipping metadata fetch", flush=True)
             return
-            
+
         if fetch_and_apply_metadata is None:
             print("[ingest-processor] Metadata helper not available, skipping metadata fetch", flush=True)
             return
-            
         try:
+            # Give calibredb time to commit the transaction
+            time.sleep(1)
             # Find the book that was just added to get its ID
             calibre_db_path = os.path.join(self.library_dir, 'metadata.db')
             with sqlite3.connect(calibre_db_path, timeout=30) as con:
                 cur = con.cursor()
-                # Get the most recently added book with this title
-                cur.execute("SELECT id, title FROM books WHERE title LIKE ? ORDER BY timestamp DESC LIMIT 1", (f"%{book_title}%",))
+                # Try exact match first, then fuzzy match
+                cur.execute("SELECT id, title FROM books WHERE title = ? ORDER BY timestamp DESC LIMIT 1", (book_title,))
                 result = cur.fetchone()
-                
+
+                if not result:
+                    # Try fuzzy match
+                    cur.execute("SELECT id, title FROM books WHERE title LIKE ? ORDER BY timestamp DESC LIMIT 1", (f"%{book_title}%",))
+                    result = cur.fetchone()
+
+                if not result:
+                    # Last resort: get the most recently added book
+                    cur.execute("SELECT id, title FROM books ORDER BY timestamp DESC LIMIT 1")
+                    result = cur.fetchone()
+                    print(f"[ingest-processor] Using most recent book as fallback: {result[1] if result else 'none'}", flush=True)
+
             if not result:
                 print(f"[ingest-processor] Could not find book ID for metadata fetch: {book_title}", flush=True)
                 return
-                
+
             book_id = result[0]
             actual_title = result[1]
-            
+
             print(f"[ingest-processor] Attempting to fetch metadata for: {actual_title}", flush=True)
-            
+
             # Fetch and apply metadata (now admin-controlled only)
             if fetch_and_apply_metadata(book_id):
                 print(f"[ingest-processor] Successfully fetched and applied metadata for: {actual_title}", flush=True)
             else:
                 print(f"[ingest-processor] No metadata improvements found for: {actual_title}", flush=True)
-                
+
         except Exception as e:
             print(f"[ingest-processor] Error fetching metadata: {e}", flush=True)
 
@@ -431,66 +554,84 @@ class NewBookProcessor:
         if not _CPS_AVAILABLE:
             print("[ingest-processor] CPS modules not available, skipping auto-send", flush=True)
             return
-            
+
         if TaskAutoSend is None or WorkerThread is None:
             print("[ingest-processor] Auto-send functionality not available, skipping auto-send", flush=True)
             return
-            
+
         try:
             # Find the book that was just added to get its ID
             calibre_db_path = os.path.join(self.library_dir, 'metadata.db')
             with sqlite3.connect(calibre_db_path, timeout=30) as con:
                 cur = con.cursor()
-                # Get the most recently added book(s) with this title
-                cur.execute("SELECT id, title FROM books WHERE title LIKE ? ORDER BY timestamp DESC LIMIT 1", (f"%{book_title}%",))
+                # Try exact match first, then fuzzy match
+                cur.execute("SELECT id, title FROM books WHERE title = ? ORDER BY timestamp DESC LIMIT 1", (book_title,))
                 result = cur.fetchone()
-                
+
+                if not result:
+                    # Try fuzzy match
+                    cur.execute("SELECT id, title FROM books WHERE title LIKE ? ORDER BY timestamp DESC LIMIT 1", (f"%{book_title}%",))
+                    result = cur.fetchone()
+
+                if not result:
+                    # Last resort: get the most recently added book
+                    cur.execute("SELECT id, title FROM books ORDER BY timestamp DESC LIMIT 1")
+                    result = cur.fetchone()
+                    print(f"[ingest-processor] Using most recent book as fallback: {result[1] if result else 'none'}", flush=True)
+
+
+                book_id = result[0]
+                actual_title = result[1]
+
             if not result:
                 print(f"[ingest-processor] Could not find book ID for auto-send: {book_title}", flush=True)
                 return
-                
-            book_id = result[0]
-            actual_title = result[1]
-            
+
             # Get users with auto-send enabled
-            app_db_path = "/config/app.db"
+            app_db_path = os.path.join(os.environ.get("ACW_CONFIG_DIR", "/config"), "app.db")
             with sqlite3.connect(app_db_path, timeout=30) as con:
                 cur = con.cursor()
                 cur.execute("""
-                    SELECT id, name, kindle_mail 
-                    FROM user 
-                    WHERE auto_send_enabled = 1 
-                    AND kindle_mail IS NOT NULL 
+                    SELECT id, name, kindle_mail
+                    FROM user
+                    WHERE auto_send_enabled = 1
+                    AND kindle_mail IS NOT NULL
                     AND kindle_mail != ''
                 """)
                 auto_send_users = cur.fetchall()
-                
+
             if not auto_send_users:
                 print(f"[ingest-processor] No users with auto-send enabled found", flush=True)
                 return
-                
+
             # Queue auto-send tasks for each user
             for user_id, username, kindle_mail in auto_send_users:
                 try:
                     delay_minutes = self.acw_settings.get('auto_send_delay_minutes', 5)
-                    
+
                     # Create auto-send task
                     task_message = f"Auto-sending '{actual_title}' to {username}'s eReader(s)"
                     task = TaskAutoSend(task_message, book_id, user_id, delay_minutes)
-                    
+
                     # Add to worker queue
                     WorkerThread.add(username, task)
-                    
+
                     print(f"[ingest-processor] Queued auto-send for '{actual_title}' to user {username} ({kindle_mail})", flush=True)
-                    
+
                 except Exception as e:
                     print(f"[ingest-processor] Error queuing auto-send for user {username}: {e}", flush=True)
-                    
+
         except Exception as e:
             print(f"[ingest-processor] Error in auto-send trigger: {e}", flush=True)
 
 
     def empty_tmp_con_dir(self):
+        """
+        Purpose: Remove all files from the temporary conversion directory (self.tmp_conversion_dir).
+
+        Note: This function only removes individual files, not any subdirectories that may
+              exist within the temporary conversion directory.
+        """
         try:
             files = os.listdir(self.tmp_conversion_dir)
             for file in files:
@@ -501,16 +642,23 @@ class NewBookProcessor:
             print(f"[ingest-processor] An error occurred while emptying {self.tmp_conversion_dir}.", flush=True)
 
     def set_library_permissions(self):
+        """
+        Purpose: Recursively set the ownership of the Calibre library directory and its contents
+        to the configured user and group.
+
+        Uses: self.owner_group_string (e.g., "user:group") which is derived from the
+              ACW_USER and ACW_GROUP environment variables.
+        """
         try:
             subprocess.run(["chown", "-R", self.owner_group_string, self.library_dir], check=True)
         except subprocess.CalledProcessError as e:
-            print(f"[ingest-processor] An error occurred while attempting to recursively set ownership of {self.library_dir} to owner_group_string. See the following error:\n{e}", flush=True)
+            print(f"[ingest-processor] An error occurred while attempting to recursively set ownership of {self.library_dir} to {self.owner_group_string}. See the following error:\n{e}", flush=True)
 
 
 def main(filepath=sys.argv[1]):
     """Checks if filepath is a directory. If it is, main will be ran on every file in the given directory
     Inotifywait won't detect files inside folders if the folder was moved rather than copied"""
-    
+
     MAX_LENGTH = 150
     filename = os.path.basename(filepath)
     name, ext = os.path.splitext(filename)
@@ -528,8 +676,17 @@ def main(filepath=sys.argv[1]):
             f = os.path.join(filepath, filename)
             if Path(f).exists():
                 main(f)
+
+        # Clean up empty directory after processing all files
+        try:
+            if not os.listdir(filepath):  # Directory is empty
+                os.rmdir(filepath)
+                print(f"[ingest-processor]: Deleted empty directory: {filepath}", flush=True)
+        except Exception as e:
+            print(f"[ingest-processor]: Could not delete directory {filepath}: {e}", flush=True)
+
         return
-    
+
     try:
         wait_for_file_stable(filepath)
     except TimeoutError as e:
@@ -540,6 +697,13 @@ def main(filepath=sys.argv[1]):
 
     # Check if the user has chosen to exclude files of this type from the ingest process
     if Path(nbp.filename).suffix in nbp.ingest_ignored_formats:
+        print(f"[ingest-processor]: {nbp.filename} is in ignored formats list, deleting...", flush=True)
+        # Delete the ignored file
+        try:
+            os.remove(nbp.filepath)
+            print(f"[ingest-processor]: Successfully deleted {nbp.filename}", flush=True)
+        except Exception as e:
+            print(f"[ingest-processor]: Failed to delete {nbp.filename}: {e}", flush=True)
         pass
     else:
         if nbp.is_target_format: # File can just be imported
@@ -559,7 +723,7 @@ def main(filepath=sys.argv[1]):
                     convert_successful, converted_filepath = nbp.convert_to_kepub()
                 else: # File is not in the convert ignore list and target is not kepub, so we start the regular conversion process
                     convert_successful, converted_filepath = nbp.convert_book()
-                    
+
                 if convert_successful: # If previous conversion process was successful, remove tmp files and import into library
                     nbp.add_book_to_library(converted_filepath) # type: ignore
 

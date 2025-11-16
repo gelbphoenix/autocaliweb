@@ -43,7 +43,7 @@ def main():
     from .tasks_status import tasks
     from .error_handler import init_errorhandler
     from .remotelogin import remotelogin
-    from .progress_syncing.protocols.kosync import kosync
+    from .kosync import kosync
     from .duplicates import duplicates
     from .basic import basic
     try:

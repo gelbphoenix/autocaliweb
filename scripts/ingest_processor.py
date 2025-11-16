@@ -475,9 +475,6 @@ class NewBookProcessor:
             self.fetch_metadata_if_enabled(import_path.stem)
 
             self.trigger_auto_send_if_enabled(import_path.stem, book_path)
-            
-            self.generate_book_checksums(import_path.stem)
-
         except subprocess.CalledProcessError as e:
             print(f"[ingest-processor] {import_path.stem} was not able to be added to the Calibre Library due to the following error:\nCALIBREDB EXIT/ERROR CODE: {e.returncode}\n{e.stderr}", flush=True)
             self.backup(book_path, backup_type="failed")
@@ -625,85 +622,6 @@ class NewBookProcessor:
 
         except Exception as e:
             print(f"[ingest-processor] Error in auto-send trigger: {e}", flush=True)
-
-    def generate_book_checksums(self, book_title: str) -> None:
-        """Generate and store partial MD5 checksums for all formats of a newly imported book
-
-        This creates KOReader-compatible checksums that allow reading progress to sync
-        between KOReader devices and Calibre-Web.
-
-        Args:
-            book_title: Title of the book (used to find the book in Calibre database)
-        """
-        try:
-            import sqlite3
-            # Import the centralized partial MD5 calculation function
-            sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-            from cps.progress_syncing.checksums import calculate_koreader_partial_md5, store_checksum, CHECKSUM_VERSION
-
-            calibre_db_path = os.path.join(self.library_dir, 'metadata.db')
-
-            with sqlite3.connect(calibre_db_path, timeout=30) as con:
-                cur = con.cursor()
-
-                # Find the book ID by title (most recently added if multiple matches)
-                book_row = cur.execute(
-                    'SELECT id, path FROM books WHERE title = ? ORDER BY timestamp DESC LIMIT 1',
-                    (book_title,)
-                ).fetchone()
-
-                if not book_row:
-                    print(f"[ingest-processor] Could not find book '{book_title}' in database for checksum generation", flush=True)
-                    return
-
-                book_id, book_path = book_row
-
-                # Get all formats for this book
-                formats = cur.execute(
-                    'SELECT format, name FROM data WHERE book = ?',
-                    (book_id,)
-                ).fetchall()
-
-                if not formats:
-                    print(f"[ingest-processor] No formats found for book ID {book_id}", flush=True)
-                    return
-
-                print(f"[ingest-processor] Generating KOReader sync checksums v{CHECKSUM_VERSION} for book ID {book_id}...", flush=True)
-
-                for format_ext, format_name in formats:
-                    # Construct full file path
-                    file_path = os.path.join(self.library_dir, book_path, f"{format_name}.{format_ext.lower()}")
-
-                    if not os.path.exists(file_path):
-                        print(f"[ingest-processor] WARN: File not found: {file_path}", flush=True)
-                        continue
-
-                    # Generate partial MD5 checksum using centralized function
-                    checksum = calculate_koreader_partial_md5(file_path)
-
-                    if checksum:
-                        # Store using centralized manager function
-                        success = store_checksum(
-                            book_id=book_id,
-                            book_format=format_ext.upper(),
-                            checksum=checksum,
-                            version=CHECKSUM_VERSION,
-                            db_connection=con
-                        )
-
-                        if success:
-                            print(f"[ingest-processor] Generated checksum {checksum} (v{CHECKSUM_VERSION}) for {format_ext.upper()} format", flush=True)
-                        else:
-                            print(f"[ingest-processor] WARN: Failed to store checksum for {format_ext.upper()} format", flush=True)
-                    else:
-                        print(f"[ingest-processor] WARN: Failed to generate checksum for {file_path}", flush=True)
-
-                con.commit()
-                print(f"[ingest-processor] Checksum generation complete for book ID {book_id}", flush=True)
-
-        except Exception as e:
-            print(f"[ingest-processor] Error generating book checksums: {e}", flush=True)
-            # Don't fail the import if checksum generation fails
 
     def empty_tmp_con_dir(self):
         """

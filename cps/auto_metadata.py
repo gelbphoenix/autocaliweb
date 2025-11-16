@@ -48,7 +48,7 @@ def fetch_metadata_for_book(book_title: str, book_authors: str = "", user_id: Op
         
         # Get ACW settings
         acw_db = ACW_DB()
-        acw_settings = cwa_db.acw_settings
+        acw_settings = acw_db.acw_settings
         
         # Check if auto metadata fetch is globally enabled
         if not acw_settings.get('auto_metadata_fetch_enabled', False):

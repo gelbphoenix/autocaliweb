@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-KOReader Sync Server Implementation for Calibre-Web-Automated
+KOReader Sync Server Implementation (Originally for Calibre-Web-Automated)
 
 This module provides a sync server compatible with KOReader's sync functionality,
 allowing users to sync their reading progress across devices.
@@ -102,6 +102,17 @@ def authenticate_user() -> Optional[ub.User]:
     if not user:
         log.warning(f"authenticate_user: User not found: {username}")
         return None
+
+    # Check if LDAP auth is enabled; if yes attempt LDAP auth
+    if config.config_login_type == constants.LOGIN_LDAP and services.ldap:
+        login_result, error = services.ldap.bind_user(user.name, password)
+
+        if login_result:
+            log.info(f"authenticate_user: Successfully logged {user.name} in.")
+            return user
+        
+        if error is not None:
+            log.error(f"authenticate_user: Error while logging in {user.name}: {error}")
 
     # Standard password check (convert password to string like Calibre-Web does)
     if check_password_hash(str(user.password), password):

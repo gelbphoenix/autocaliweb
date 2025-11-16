@@ -96,6 +96,86 @@ class EPUBFixer:
         self.binary_files = {}
         self.entries = []
 
+    
+    def _extract_book_info_from_path(self, file_path: str) -> tuple[int | None, str]:
+        """Extract book ID and format from file path.
+        Expected path format: /calibre-library/Author/Title (123)/book.epub
+        Returns: (book_id, format) or (None, 'EPUB')
+        """
+        try:
+            import re
+            path_parts = str(file_path).split(os.sep)
+            # Look for directory with format "Title (123)"
+            for part in path_parts:
+                match = re.search(r'\((\d+)\)$', part)
+                if match:
+                    book_id = int(match.group(1))
+                    format_ext = Path(file_path).suffix.lstrip('.').upper()
+                    return book_id, format_ext
+            return None, 'EPUB'
+        except Exception:
+            return None, 'EPUB'
+
+    def _get_metadata_db_path(self) -> str:
+        """Get the path to metadata.db considering split library configuration."""
+        try:
+            con = sqlite3.connect("/config/app.db", timeout=30)
+            cur = con.cursor()
+            split_library = cur.execute('SELECT config_calibre_split FROM settings;').fetchone()[0]
+
+            if split_library:
+                db_path = cur.execute('SELECT config_calibre_dir FROM settings;').fetchone()[0]
+                con.close()
+                return os.path.join(db_path, "metadata.db")
+            else:
+                con.close()
+                library_location = get_library_location()
+                return os.path.join(library_location, "metadata.db")
+        except Exception:
+            # Fallback to default location
+            return "/calibre-library/metadata.db"
+
+    def _recalculate_checksum_after_modification(self, book_id: int, file_format: str, file_path: str) -> None:
+        """Calculate and store new checksum after modifying an EPUB file."""
+        try:
+            # Import the checksum calculation function
+            import sys
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            if project_root not in sys.path:
+                sys.path.insert(0, project_root)
+
+            from cps.progress_syncing.checksums import calculate_koreader_partial_md5, store_checksum, CHECKSUM_VERSION
+
+            # Calculate new checksum
+            checksum = calculate_koreader_partial_md5(file_path)
+            if not checksum:
+                print_and_log(f"[acw-kindle-epub-fixer] Warning: Failed to calculate checksum for {file_path}", log=self.manually_triggered)
+                return
+
+            # Store in database using centralized manager function
+            metadb_path = self._get_metadata_db_path()
+            con = sqlite3.connect(metadb_path, timeout=30)
+
+            try:
+                success = store_checksum(
+                    book_id=book_id,
+                    book_format=file_format,
+                    checksum=checksum,
+                    version=CHECKSUM_VERSION,
+                    db_connection=con
+                )
+
+                if success:
+                    print_and_log(f"[acw-kindle-epub-fixer] Stored checksum {checksum[:8]}... for book {book_id} (v{CHECKSUM_VERSION})", log=self.manually_triggered)
+                else:
+                    print_and_log(f"[acw-kindle-epub-fixer] Warning: Failed to store checksum for book {book_id}", log=self.manually_triggered)
+            finally:
+                con.close()
+        except Exception as e:
+            print_and_log(f"[acw-kindle-epub-fixer] Warning: Failed to recalculate checksum: {e}", log=self.manually_triggered)
+            import traceback
+            print_and_log(traceback.format_exc(), log=self.manually_triggered)
+
 
     def backup_original_file(self, epub_path):
         """Backup original file"""
@@ -291,6 +371,8 @@ class EPUBFixer:
         if not output_path:
             output_path = input_path
 
+        book_id, book_format = self._extract_book_info_from_path(input_path)
+
         # Back Up Original File
         print_and_log("[acw-kindle-epub-fixer] Backing up original file...", log=self.manually_triggered)
         self.backup_original_file(input_path)
@@ -318,6 +400,9 @@ class EPUBFixer:
             output_path = output_path + os.path.basename(input_path)
         self.write_epub(output_path)
         print_and_log("[acw-kindle-epub-fixer] EPUB successfully written.", log=self.manually_triggered)
+
+        if book_id and self.fixed_problems:
+            self._recalculate_checksum_after_modification(book_id, book_format, output_path)
         
         # Add entry to acw.db
         print_and_log("[acw-kindle-epub-fixer] Adding run to acw.db...", log=self.manually_triggered)

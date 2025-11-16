@@ -50,6 +50,9 @@ from flask import flash, g, Flask
 from . import logger, ub, isoLanguages
 from .pagination import Pagination
 from .string_helper import strip_whitespaces
+from .progress_syncing import models as _progress_models
+
+BookFormatChecksum = _progress_models.BookFormatChecksum
 
 log = logger.create()
 
@@ -680,6 +683,7 @@ class CalibreDB:
 
     @classmethod
     def setup_db(cls, config_calibre_dir, app_db_path):
+        cls.dispose()
 
         if not config_calibre_dir:
             cls.config.invalidate()
@@ -717,9 +721,17 @@ class CalibreDB:
                 log.error_or_exception(e)
                 return None
 
-        return scoped_session(sessionmaker(autocommit=False,
+        cls.session_factory = scoped_session(sessionmaker(autocommit=False,
                                            autoflush=False,
                                            bind=engine, future=True))
+        
+        for inst in cls.instances:
+            inst.init_session()
+
+        from .progress_syncing.models import ensure_calibre_db_tables
+        ensure_calibre_db_tables()
+
+        cls._init = True
 
 
     def get_book(self, book_id):
@@ -1084,6 +1096,38 @@ class CalibreDB:
             conn.create_function("lower", 1, lcase)
         except sqliteOperationalError:
             pass
+
+    @classmethod
+    def dispose(cls):
+        # global session
+
+        for inst in cls.instances:
+            old_session = inst.session
+            inst.session = None
+            if old_session:
+                try:
+                    old_session.close()
+                except Exception:
+                    pass
+                if old_session.bind:
+                    try:
+                        old_session.bind.dispose()
+                    except Exception:
+                        pass
+
+        for attr in list(Books.__dict__.keys()):
+            if attr.startswith("custom_column_"):
+                setattr(Books, attr, None)
+
+        for db_class in cc_classes.values():
+            Base.metadata.remove(db_class.__table__)
+        cc_classes.clear()
+
+        for table in reversed(Base.metadata.sorted_tables):
+            name = table.key
+            if name.startswith("custom_column_") or name.startswith("books_custom_column_"):
+                if table is not None:
+                    Base.metadata.remove(table)
 
     def reconnect_db(self, config, app_db_path):
         # self.dispose()

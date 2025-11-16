@@ -169,6 +169,51 @@ class Enforcer:
         with open(dirs_json, "r") as f:
             dirs = json.load(f)
         return dirs["calibre_library_dir"]  # Returns without / on the end
+    
+    def _recalculate_checksum_after_modification(self, book_id: str, file_format: str, file_path: str) -> None:
+        """Calculate and store new checksum after modifying a book file."""
+        try:
+            # Import the checksum calculation function
+            import sys
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            if project_root not in sys.path:
+                sys.path.insert(0, project_root)
+
+            from cps.progress_syncing.checksums import calculate_koreader_partial_md5, store_checksum, CHECKSUM_VERSION
+
+            # Calculate new checksum
+            checksum = calculate_koreader_partial_md5(file_path)
+            if not checksum:
+                print(f"[cover-metadata-enforcer] Warning: Failed to calculate checksum for {file_path}", flush=True)
+                return
+
+            # Store in database using centralized manager function
+            metadb_path = os.path.join(
+                (self.split_library or {}).get("db_path", self.calibre_library),
+                "metadata.db"
+            )
+
+            con = sqlite3.connect(metadb_path, timeout=30)
+
+            try:
+                success = store_checksum(
+                    book_id=int(book_id),
+                    book_format=file_format.upper(),
+                    checksum=checksum,
+                    version=CHECKSUM_VERSION,
+                    db_connection=con
+                )
+
+                if success:
+                    print(f"[cover-metadata-enforcer] Stored checksum {checksum[:8]}... for book {book_id} format {file_format} ({CHECKSUM_VERSION})", flush=True)
+                else:
+                    print(f"[cover-metadata-enforcer] Warning: Failed to store checksum for book {book_id}", flush=True)
+            finally:
+                con.close()
+        except Exception as e:
+            print(f"[cover-metadata-enforcer] Warning: Failed to recalculate checksum: {e}", flush=True)
+            import traceback
+            print(traceback.format_exc(), flush=True)
 
     def read_log(self, auto=True, log_path: str = "None") -> dict:
         """Reads pertinent information from the given log file, adds the book_id from the log name and returns the info as a dict"""
@@ -252,6 +297,7 @@ class Enforcer:
                     f"[cover-metadata-enforcer]: DONE: '{book.title_author}.{book.file_format}': Cover & Metadata updated",
                     flush=True,
                 )
+                self._recalculate_checksum_after_modification(book.book_id, book.file_format, file)
                 book_objects.append(book)
 
             return book_objects

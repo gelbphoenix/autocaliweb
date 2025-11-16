@@ -93,7 +93,9 @@ app.config.update(
     REMEMBER_COOKIE_NAME=os.environ.get('COOKIE_PREFIX', "") + "remember_token"
 )
 
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+num_proxies = int(os.environ.get("TRUSTED_PROXY_COUNT", "1"))
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=num_proxies, x_proto=num_proxies, x_host=num_proxies, x_prefix=num_proxies)
+log.info(f"ProxyFix configured for {num_proxies} proxy(ies) to trust")
 
 lm = MyLoginManager()
 

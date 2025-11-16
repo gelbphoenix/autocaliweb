@@ -565,22 +565,6 @@ class Downloads(Base):
 
     def __repr__(self):
         return '<Download %r' % self.book_id
-    
-
-class KOSyncProgress(Base):
-    __tablename__ = 'kosync_progress'
-
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
-    document = Column(String, nullable=False)
-    progress = Column(String, nullable=False)
-    percentage = Column(Float, nullable=False)
-    device = Column(String, nullable=False)
-    device_id = Column(String)
-    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-
-    def __repr__(self):
-        return '<KOSyncProgress %r - %r>' % (self.user_id, self.document)
 
 
 # Baseclass representing allowed domains for registration
@@ -726,6 +710,60 @@ def migrate_oauth_table(engine, _session):
             if not any(row[1] == col_name for row in exists):
                 conn.execute(text(f"ALTER TABLE oauthProvider ADD COLUMN {col_name} {col_def}"))
 
+def migrate_config_table(engine, _session):
+    """Migrate configuration table to add new authentication columns"""
+    if not engine or not _session:
+        logger.get_logger("cps.ub").error("Cannot migrate config table: missing engine or session")
+        return
+
+    # Add OAuth redirect host configuration
+    try:
+        # Test if the new column exists
+        _session.execute(text("SELECT config_oauth_redirect_host FROM settings LIMIT 1"))
+        _session.commit()
+    except exc.OperationalError:  # Column doesn't exist
+        try:
+            with engine.connect() as conn:
+                trans = conn.begin()
+                conn.execute(text("ALTER TABLE settings ADD column 'config_oauth_redirect_host' String DEFAULT ''"))
+                trans.commit()
+        except Exception as e:
+            logger.get_logger("cps.ub").error("Failed to add config_oauth_redirect_host column: %s", e)
+            # Don't raise - let CWA continue without this feature
+            pass
+
+    # Add reverse proxy auto-create users configuration
+    try:
+        # Test if the new column exists
+        _session.execute(text("SELECT config_reverse_proxy_auto_create_users FROM settings LIMIT 1"))
+        _session.commit()
+    except exc.OperationalError:  # Column doesn't exist
+        try:
+            with engine.connect() as conn:
+                trans = conn.begin()
+                conn.execute(text("ALTER TABLE settings ADD column 'config_reverse_proxy_auto_create_users' Boolean DEFAULT 0"))
+                trans.commit()
+        except Exception as e:
+            logger.get_logger("cps.ub").error("Failed to add config_reverse_proxy_auto_create_users column: %s", e)
+            # Don't raise - let CWA continue without this feature
+            pass
+
+    # Add LDAP auto-create users configuration
+    try:
+        # Test if the new column exists
+        _session.execute(text("SELECT config_ldap_auto_create_users FROM settings LIMIT 1"))
+        _session.commit()
+    except exc.OperationalError:  # Column doesn't exist
+        try:
+            with engine.connect() as conn:
+                trans = conn.begin()
+                conn.execute(text("ALTER TABLE settings ADD column 'config_ldap_auto_create_users' Boolean DEFAULT 1"))
+                trans.commit()
+        except Exception as e:
+            logger.get_logger("cps.ub").error("Failed to add config_ldap_auto_create_users column: %s", e)
+            # Don't raise - let CWA continue without this feature
+            pass
+
 # Migrate database to current version, has to be updated after every database change. Currently, migration from
 # maybe 4/5 versions back to current should work.
 # Migration is done by checking if relevant columns are existing, and then adding rows with SQL commands
@@ -736,6 +774,10 @@ def migrate_Database(_session):
     migrate_user_session_table(engine, _session)
     migrate_user_table(engine, _session)
     migrate_oauth_table(engine, _session)
+    migrate_config_table(engine, _session)
+
+    from .progress_syncing.models import ensure_app_db_tables
+    ensure_app_db_tables(engine.raw_connection())
 
 
 def clean_database(_session):

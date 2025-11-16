@@ -1001,6 +1001,8 @@ def save_cover(img, book_path):
 def do_download_file(book, book_format, client, data, headers):
     book_name = data.name
     download_name = filename = None
+    metadata_embedded = False
+
     if config.config_use_google_drive:
         # startTime = time.time()
         df = gd.getFileFromEbooksFolder(book.path, data.name + "." + book_format)
@@ -1016,8 +1018,10 @@ def do_download_file(book, book_format, client, data, headers):
                 gd.downloadFile(book.path, book_name + "." + book_format, output)
                 if book_format == "kepub" and config.config_kepubifypath:
                     filename, download_name = do_kepubify_metadata_replace(book, output)
+                    metadata_embedded = True
                 elif book_format != "kepub" and config.config_binariesdir:
                     filename, download_name = do_calibre_export(book.id, book_format)
+                    metadata_embedded = True
             else:
                 return gd.do_gdrive_download(df, headers)
         else:
@@ -1034,10 +1038,38 @@ def do_download_file(book, book_format, client, data, headers):
         if book_format == "kepub" and config.config_kepubifypath and config.config_embed_metadata:
             filename, download_name = do_kepubify_metadata_replace(book, os.path.join(filename,
                                                                                       book_name + "." + book_format))
+            metadata_embedded = True
         elif book_format != "kepub" and config.config_binariesdir and config.config_embed_metadata:
             filename, download_name = do_calibre_export(book.id, book_format)
+            metadata_embedded = True
+
+            if filename and download_name:
+                uuid_file = os.path.join(filename, download_name + "." * book_format)
+                expected_file = os.path.join(filename, book_name + "." * book_format)
+
+                if os.path.exists(uuid_file) and uuid_file != expected_file:
+                    try:
+                        if os.path.exists(expected_file):
+                            os.remove(expected_file)
+                        
+                        os.rename(uuid_file, expected_file)
+                        download_name = book_name
+                        log.info(f"Renamed exported file to match expected name: {book_name}.{book_format}")
+                    except Exception as e:
+                        log.error(f"Failed to rename exported file: {e}")
         else:
             download_name = book_name
+
+    if metadata_embedded and filename and download_name:
+        try:
+            from .progress_syncing import calculate_and_store_checksum
+
+            exported_file = os.path.join(filename, download_name + "." + book_format)
+
+            if os.path.exists(exported_file):
+                calculate_and_store_checksum(book_id=book.id, book_format=book_format, file_path=exported_file)
+        except Exception as e:
+            log.error(f"Failed to calculate and/or store checksum for book {book.id}: {e}")
 
     response = make_response(send_from_directory(filename, download_name + "." + book_format))
     # ToDo Check headers parameter

@@ -44,10 +44,10 @@ def fetch_metadata_for_book(book_title: str, book_authors: str = "", user_id: Op
     """
     try:
         # Import here to avoid circular imports
-        from scripts.cwa_db import CWA_DB
+        from scripts.acw_db import ACW_DB
         
-        # Get CWA settings
-        cwa_db = CWA_DB()
+        # Get ACW settings
+        acw_db = ACW_DB()
         acw_settings = cwa_db.acw_settings
         
         # Check if auto metadata fetch is globally enabled

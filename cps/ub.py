@@ -26,8 +26,7 @@ import uuid
 from flask import session as flask_session
 from binascii import hexlify
 
-from .cw_login import AnonymousUserMixin, current_user
-from .cw_login import user_logged_in
+from .cw_login import AnonymousUserMixin, current_user, user_logged_in
 
 try:
     from flask_dance.consumer.backend.sqla import OAuthConsumerMixin
@@ -40,9 +39,7 @@ except ImportError as e:
     except ImportError as e:
         OAuthConsumerMixin = BaseException
         oauth_support = False
-from sqlalchemy import create_engine, exc, exists, event, text
-from sqlalchemy import Column, ForeignKey
-from sqlalchemy import String, Integer, SmallInteger, Boolean, DateTime, Float, JSON
+from sqlalchemy import create_engine, exc, exists, event, text, Column, ForeignKey, Index, String, Integer, SmallInteger, Boolean, DateTime, Float, JSON
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.sql.expression import func
 try:
@@ -58,7 +55,7 @@ from .string_helper import strip_whitespaces
 
 log = logger.create()
 
-session = None
+session: Session | None = None
 app_DB_path = None
 Base = declarative_base()
 searched_ids = {}
@@ -507,6 +504,42 @@ class KoboStatistics(Base):
     last_modified = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     remaining_time_minutes = Column(Integer)
     spent_reading_minutes = Column(Integer)
+
+class KoboAnnotationSync(Base):
+    """Track which Kobo annotations have been synced to external services (e.g., Hardcover)."""
+    __tablename__ = 'kobo_annotation_sync'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
+    annotation_id = Column(String, nullable=False)  # Kobo annotation UUID
+    book_id = Column(Integer, nullable=False)  # Calibre book ID
+    synced_to_hardcover = Column(Boolean, default=False)
+    hardcover_journal_id = Column(Integer)  # Hardcover journal entry ID
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    last_synced = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    highlighted_text = Column(String, nullable=True)
+    highlight_color = Column(String, nullable=True)
+    note_text = Column(String, nullable=True)
+    
+    __table_args__ = (
+        Index('ix_kobo_annotation_sync_user_annotation', 'user_id', 'annotation_id'),
+    )
+
+    def __repr__(self):
+        return f'<KoboAnnotationSync annotation_id={self.annotation_id} book_id={self.book_id}>'
+
+
+class HardcoverBookBlacklist(Base):
+    """Track book-level blacklisting for hardcover sync features."""
+    __tablename__ = 'hardcover_book_blacklist'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    book_id = Column(Integer, nullable=False, unique=True)  # Calibre book ID
+    blacklist_annotations = Column(Boolean, default=False)  # Block annotation syncing
+    blacklist_reading_progress = Column(Boolean, default=False)  # Block reading progress syncing
+
+    def __repr__(self):
+        return f'<HardcoverBookBlacklist book_id={self.book_id} annotations={self.blacklist_annotations} progress={self.blacklist_reading_progress}>'
 
 
 # Updates the last_modified timestamp in the KoboReadingState table if any of its children tables are modified.

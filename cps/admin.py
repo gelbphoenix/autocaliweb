@@ -1866,6 +1866,7 @@ def _configuration_update_helper():
         _config_int(to_save, "config_external_port")
         _config_checkbox_int(to_save, "config_kobo_proxy")
         _config_checkbox_int(to_save, "config_hardcover_sync")
+        _config_checkbox_int(to_save, "config_hardcover_annosync")
 
         if "config_upload_formats" in to_save:
             to_save["config_upload_formats"] = ','.join(

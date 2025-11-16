@@ -907,8 +907,16 @@ def HandleStateRequest(book_uuid):
             abort(400, description="Malformed request data is missing 'ReadingStates' key")
 
         if config.config_hardcover_sync and bool(hardcover):
-            hardcoverClient = hardcover.HardcoverClient(current_user.hardcover_token)
-            hardcoverClient.update_reading_progress(book.identifiers, request_bookmark["ProgressPercent"])
+            # Check blacklist status of book
+            blacklist = ub.session.query(ub.HardcoverBookBlacklist).filter(
+                ub.HardcoverBookBlacklist.book_id == book.id
+            ).first()
+
+            if blacklist and blacklist.blacklist_reading_progress:
+                log.debug(f"Skipping reading progress sync for book {book.id} - blacklisted for reading progress")
+            else:
+                hardcoverClient = hardcover.HardcoverClient(current_user.hardcover_token)
+                hardcoverClient.update_reading_progress(book.identifiers, request_bookmark["ProgressPercent"])
 
         ub.session.merge(kobo_reading_state)
         ub.session_commit()
@@ -1215,6 +1223,8 @@ def HandleInitRequest():
                                                                width="{width}",
                                                                height="{height}",
                                                                isGreyscale='false'))
+        if config.config_hardcover_annosync and bool(hardcover):
+            kobo_resources["reading_services_host"] = calibre_web_url
         kobo_resources["kobo_subscriptions_enabled"] = plus_enabled
         kobo_resources["kobo_nativeborrow_enabled"] = borrow_enabled
         kobo_resources["instapaper_enabled"] = ip_enabled
@@ -1243,6 +1253,8 @@ def HandleInitRequest():
                                                                height="{height}",
                                                                isGreyscale='false',
                                                                _external=True))
+        if config.config_hardcover_annotations_sync and bool(hardcover):
+            kobo_resources["reading_services_host"] = url_for("web.index", _external=True).strip("/")
         kobo_resources["kobo_subscriptions_enabled"] = plus_enabled
         kobo_resources["kobo_nativeborrow_enabled"] = borrow_enabled
         kobo_resources["instapaper_enabled"] = ip_enabled
@@ -1335,8 +1347,8 @@ def NATIVE_KOBO_RESOURCES():
         "giftcard_epd_redeem_url": "https://www.kobo.com/{storefront}/{language}/redeem-ereader",
         "giftcard_redeem_url": "https://www.kobo.com/{storefront}/{language}/redeem",
         "gpb_flow_enabled": "False",
-        "help_page": "http://www.kobo.com/help",
-        "image_host": "//cdn.kobo.com/book-images/",
+        "help_page": "https://www.kobo.com/help",
+        "image_host": "https://cdn.kobo.com/book-images/",
         "image_url_quality_template": "https://cdn.kobo.com/book-images/{ImageId}/{Width}/{Height}/{Quality}/{IsGreyscale}/image.jpg",
         "image_url_template": "https://cdn.kobo.com/book-images/{ImageId}/{Width}/{Height}/false/image.jpg",
         "instapaper_enabled": "False",

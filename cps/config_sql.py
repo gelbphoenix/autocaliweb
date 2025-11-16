@@ -102,6 +102,7 @@ class _Settings(_Base):
     config_use_hardcover = Column(Boolean, default=False)
     config_hardcover_api_token = Column(String)
     config_hardcover_sync = Column(Boolean, default=False)
+    config_hardcover_annosync = Column(Boolean, default=False)
 
     config_default_role = Column(SmallInteger, default=0)
     config_default_show = Column(SmallInteger, default=constants.ADMIN_USER_SIDEBAR)

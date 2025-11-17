@@ -194,12 +194,12 @@ handle_event() {
         echo "idle" > "$STATUS_FILE"
 }
 
-if [ "${NETWORK_SHARE_MODE,,}" = "true" ] || [ "${NETWORK_SHARE_MODE}" = "1" ] || [ "${NETWORK_SHARE_MODE,,}" = "yes" ] || [ "${NETWORK_SHARE_MODE,,}" = "on" ]; then
-        echo "[acw-ingest-service] NETWORK_SHARE_MODE=true -> using fallback watcher"
+if [ "${ACW_CHOWN_LIBRARY:-false}" = "true" ]; then
+        echo "[acw-ingest-service] ACW_CHOWN_LIBRARY=true -> using fallback watcher"
         run_fallback; exit 0
 fi
 
-if [ "${ACW_WATCH_MODE:-inotify}" = "poll" ]; then
+if [ "${WATCH_MODE:-inotify}" = "poll" ]; then
         run_fallback; exit 0
 fi
 

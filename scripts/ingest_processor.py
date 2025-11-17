@@ -185,7 +185,7 @@ class NewBookProcessor:
         self.is_kindle_epub_fixer = self.acw_settings['kindle_epub_fixer']
 
         self.supported_book_formats = {'azw', 'azw3', 'azw4', 'cbz', 'cbr', 'cb7', 'cbc', 'chm', 'djvu', 'docx', 'epub', 'fb2', 'fbz', 'html', 'htmlz', 'lit', 'lrf', 'mobi', 'odt', 'pdf', 'prc', 'pdb', 'pml', 'rb', 'rtf', 'snb', 'tcr', 'txtz', 'txt', 'kepub', 'cbt'}
-        self.hierarchy_of_success = {'epub', 'lit', 'mobi', 'azw', 'epub', 'azw3', 'fb2', 'fbz', 'azw4',  'prc', 'odt', 'lrf', 'pdb',  'cbz', 'pml', 'rb', 'cbr', 'cb7', 'cbc', 'chm', 'djvu', 'snb', 'tcr', 'pdf', 'docx', 'rtf', 'html', 'htmlz', 'txtz', 'txt'}
+        self.hierarchy_of_success = {'epub', 'lit', 'mobi', 'azw', 'azw3', 'fb2', 'fbz', 'azw4',  'prc', 'odt', 'lrf', 'pdb',  'cbz', 'pml', 'rb', 'cbr', 'cb7', 'cbc', 'chm', 'djvu', 'snb', 'tcr', 'pdf', 'docx', 'rtf', 'html', 'htmlz', 'txtz', 'txt'}
         self.supported_audiobook_formats = {'m4a', 'm4b', 'mp4', 'mp3', 'flac', 'ogg', 'wav', 'opus', 'aac', 'aiff', 'asf', 'ogv'}
         self.ingest_folder, self.library_dir, self.tmp_conversion_dir = self.get_dirs(os.path.join(os.environ.get("ACW_INSTALL_DIR", "/app/autocaliweb"), "dirs.json"))
 
@@ -668,9 +668,11 @@ def main(filepath=sys.argv[1]):
         new_path = os.path.join(os.path.dirname(filepath), new_name)
         os.rename(filepath, new_path)
         filepath = new_path
+    
+    with open(os.path.join(os.environ.get("ACW_INSTALL_DIR", "/app/autocaliweb"), "dirs.json"), 'r') as f:
+        ingest_dir = json.load(f)['ingest_folder']
 
     if os.path.isdir(filepath) and Path(filepath).exists():
-        # print(os.listdir(filepath))
         for filename in os.listdir(filepath):
             f = os.path.join(filepath, filename)
             if Path(f).exists():
@@ -678,11 +680,14 @@ def main(filepath=sys.argv[1]):
 
         # Clean up empty directory after processing all files
         try:
-            if not os.listdir(filepath):  # Directory is empty
+            if not os.listdir(filepath) and os.path.normpath(filepath) != os.path.normpath(ingest_dir):  # Directory is empty and not ingest_dir
                 os.rmdir(filepath)
                 print(f"[ingest-processor]: Deleted empty directory: {filepath}", flush=True)
         except Exception as e:
-            print(f"[ingest-processor]: Could not delete directory {filepath}: {e}", flush=True)
+            if os.path.normpath(filepath) == os.path.normpath(ingest_dir):
+                print(f"[ingest-processor]: Skipping deletion of ingest directory", flush=True)
+            else:
+                print(f"[ingest-processor]: Could not delete directory {filepath}: {e}", flush=True)
 
         return
 

@@ -35,7 +35,7 @@ epub_fixer_log_file = os.path.join(config_dir, "epub-fixer.log")
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # Set the logging level
 # Create a FileHandler
-file_handler = logging.FileHandler(epub_fixer_log_file, mode='w')
+file_handler = logging.FileHandler(epub_fixer_log_file, mode='w', encoding='utf-8')
 # Create a Formatter and set it for the handler
 LOG_FORMAT = '%(message)s'
 formatter = logging.Formatter(LOG_FORMAT)
@@ -289,8 +289,6 @@ class EPUBFixer:
         """Process a single EPUB file"""
         if not output_path:
             output_path = input_path
-
-        book_id, book_format = self._extract_book_info_from_path(input_path)
 
         # Back Up Original File
         print_and_log("[acw-kindle-epub-fixer] Backing up original file...", log=self.manually_triggered)

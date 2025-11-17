@@ -13,12 +13,22 @@ from acw_db import ACW_DB
 from kindle_epub_fixer import EPUBFixer
 import audiobook
 
+try:
+    # Ensure project root is on sys.path to import cps
+    cps_path = os.path.dirname(os.path.dirname(__file__))
+    if cps_path not in sys.path:
+        sys.path.append(cps_path)
+except Exception as e:
+    print(f"[ingest-processor] Fatal error during path setup: {e}", flush=True)
+    sys.exit(1)
+
 from cps import cli_param, db, config_sql, ub
 from cps.constants import CONFIG_DIR, DEFAULT_GDRIVE_FILE
 
 # Initialize cli_param
 cli_param.gd_path = os.path.join(CONFIG_DIR, DEFAULT_GDRIVE_FILE)
 cli_param.settings_path = os.path.join(CONFIG_DIR, 'app.db')
+cli_param.logpath = cli_param.logpath or ""
 
 # Initialize the user database
 ub.init_db(cli_param.settings_path)
@@ -45,15 +55,6 @@ fetch_and_apply_metadata = None
 TaskAutoSend = None
 WorkerThread = None
 _ub = None
-
-try:
-    # Ensure project root is on sys.path to import cps
-    cps_path = os.path.dirname(os.path.dirname(__file__))
-    if cps_path not in sys.path:
-        sys.path.append(cps_path)
-except Exception as e:
-    print(f"[ingest-processor] Fatal error during path setup: {e}", flush=True)
-    sys.exit(1)
 
 # Import GDrive functionality
 try:

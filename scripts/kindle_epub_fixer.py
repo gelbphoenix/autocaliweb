@@ -317,9 +317,6 @@ class EPUBFixer:
             output_path = output_path + os.path.basename(input_path)
         self.write_epub(output_path)
         print_and_log("[acw-kindle-epub-fixer] EPUB successfully written.", log=self.manually_triggered)
-
-        if book_id and self.fixed_problems:
-            self._recalculate_checksum_after_modification(book_id, book_format, output_path)
         
         # Add entry to acw.db
         print_and_log("[acw-kindle-epub-fixer] Adding run to acw.db...", log=self.manually_triggered)

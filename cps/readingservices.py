@@ -19,7 +19,7 @@ import zipfile
 import re
 from datetime import datetime, timezone
 from functools import wraps
-from typing import TypedDict, NotRequired
+from typing import TypedDict
 from flask import Blueprint, request, make_response, jsonify, abort
 from werkzeug.datastructures import Headers
 import requests
@@ -28,6 +28,11 @@ from lxml import etree
 from . import logger, calibre_db, db, config, ub, csrf
 from .cw_login import current_user, login_required
 from .services import hardcover
+
+try:
+    from typing import NotRequired
+except ImportError:
+    from typing import Optional as NotRequired
 
 log = logger.create()
 

@@ -94,9 +94,9 @@ def main():
     if kobo_available:
         app.register_blueprint(kobo)
         app.register_blueprint(kobo_auth)
+        limiter.limit("3/minute", key_func=get_remote_address)(kobo)
         app.register_blueprint(readingservices_api_v3)
         app.register_blueprint(readingservices_userstorage)
-        limiter.limit("3/minute", key_func=get_remote_address)(kobo)
     if oauth_available:
         app.register_blueprint(oauth)
     success = web_server.start()

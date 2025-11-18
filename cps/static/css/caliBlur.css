@@ -5640,10 +5640,6 @@ body.shelf.modal-open > .container-fluid {
   border-color: initial;
 }
 
-#remove-from-shelves {
-  z-index: -1;
-}
-
 #remove-from-shelves > .btn {
   background-color: rgba(0, 0, 0, 0.15);
   color: hsla(0, 0%, 100%, 0.7);

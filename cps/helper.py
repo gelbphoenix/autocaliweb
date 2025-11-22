@@ -1044,8 +1044,8 @@ def do_download_file(book, book_format, client, data, headers):
             metadata_embedded = True
 
             if filename and download_name:
-                uuid_file = os.path.join(filename, download_name + "." * book_format)
-                expected_file = os.path.join(filename, book_name + "." * book_format)
+                uuid_file = os.path.join(filename, download_name + "." + book_format)
+                expected_file = os.path.join(filename, book_name + "." + book_format)
 
                 if os.path.exists(uuid_file) and uuid_file != expected_file:
                     try:

@@ -1060,17 +1060,6 @@ def do_download_file(book, book_format, client, data, headers):
         else:
             download_name = book_name
 
-    if metadata_embedded and filename and download_name:
-        try:
-            from .progress_syncing import calculate_and_store_checksum
-
-            exported_file = os.path.join(filename, download_name + "." + book_format)
-
-            if os.path.exists(exported_file):
-                calculate_and_store_checksum(book_id=book.id, book_format=book_format, file_path=exported_file)
-        except Exception as e:
-            log.error(f"Failed to calculate and/or store checksum for book {book.id}: {e}")
-
     response = make_response(send_from_directory(filename, download_name + "." + book_format))
     # ToDo Check headers parameter
     for element in headers:

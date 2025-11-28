@@ -122,7 +122,7 @@ def load_user_from_reverse_proxy_header(req):
             user = ub.session.query(ub.User).filter(func.lower(ub.User.name) == rp_header_username.lower()).first()
             if not user and config.config_reverse_proxy_create_users:
                 create_user_from_reverse_proxy_header(req)
-                user = _fetch_user_by_name(rp_header_username)
+                user = ub.session.query(ub.User).filter(func.lower(ub.User.name) == rp_header_username.lower()).first()
             if user:
                 [limiter.limiter.storage.clear(k.key) for k in limiter.current_limits]
                 return user
@@ -141,11 +141,11 @@ def create_user_from_reverse_proxy_header(req):
     user.default_language = config.config_default_language
     user.locale = config.config_default_language
     user.role = config.config_default_role
-    user.sidebar_view = config.config_default_sidebar_view
-    user.allowed_tags = config.config_default_allowed_tags
-    user.denied_tags = config.config_default_denied_tags
-    user.allowed_column_value = config.config_default_allowed_column_value
-    user.denied_column_value = config.config_default_denied_column_value
+    user.sidebar_view = config.config_default_show
+    user.allowed_tags = config.config_allowed_tags
+    user.denied_tags = config.config_denied_tags
+    user.allowed_column_value = config.config_allowed_column_value
+    user.denied_column_value = config.config_denied_column_value
 
     rp_email_header_name = config.config_reverse_proxy_login_email_header_name
     if rp_email_header_name:

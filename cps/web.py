@@ -1492,7 +1492,9 @@ def login():
     if current_user is not None and current_user.is_authenticated:
         return redirect(url_for('web.index'))
     
-    if (config.config_oauth_auto_redirect and 3 in oauth_check):
+    redirect_parameter = request.args.get("noredir", default=False, type=bool)
+    
+    if (config.config_oauth_auto_redirect and 3 in oauth_check) and not redirect_parameter:
         return redirect(url_for('generic.login'))
     
     if config.config_login_type == constants.LOGIN_LDAP and not services.ldap:

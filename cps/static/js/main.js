@@ -66,18 +66,24 @@ if ("serviceWorker" in navigator) {
         .then((reg) => {
             console.log("Service Worker registered with scope:", reg.scope);
 
-            reg.onupdatefound = () => {
+            reg.addEventListener("updatefound", () => {
                 const newWorker = reg.installing;
-                newWorker.onstatechange = () => {
+
+                newWorker.addEventListener("statechange", () => {
                     if (
                         newWorker.state === "installed" &&
                         navigator.serviceWorker.controller
                     ) {
-                        newWorker.postMessage("SKIP_WAITING");
+                        console.log(
+                            "[ACW Service Worker] New Version available"
+                        );
+                        newWorker.postMessage({ type: "SKIP_WAITING" });
                         window.location.reload();
                     }
-                };
-            };
+                });
+            });
+
+            setInterval(() => reg.update(), 3600000);
         })
         .catch((err) =>
             console.error("Service Worker registration failed:", err)

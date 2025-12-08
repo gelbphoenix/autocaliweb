@@ -38,6 +38,7 @@ self.addEventListener("fetch", (e) => {
 
     if (
         !e.request.url.startsWith(self.location.origin) ||
+        e.request.url.startsWith(self.location.origin + "/kobo/") ||
         e.request.url.includes("/login") ||
         e.request.url.includes("/oauth") ||
         e.request.url.includes("/metadata")
@@ -68,6 +69,13 @@ self.addEventListener("fetch", (e) => {
 
 self.addEventListener("message", (e) => {
     if (e.data === "SKIP_WAITING") {
+        self.skipWaiting();
+    }
+});
+
+// Neue Event-Listener für automatische Updates
+self.addEventListener("message", (event) => {
+    if (event.data && event.data.type === "SKIP_WAITING") {
         self.skipWaiting();
     }
 });

@@ -196,11 +196,17 @@ class TaskEmail(CalibreTask):
     def send_standard_email(self, msg):
         use_ssl = int(self.settings.get('mail_use_ssl', 0))
         timeout = 600  # set timeout to 5mins
+        use_unverified = os.getenv("MAIL_ALLOW_UNVERIFIED","false").strip().lower() in ("1", "true")
 
         # on python3 debugoutput is caught with overwritten _print_debug function
         log.debug("Start sending e-mail")
         if use_ssl == 2:
             context = ssl.create_default_context()
+
+            if use_unverified:
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+
             self.asyncSMTP = EmailSSL(self.settings["mail_server"], self.settings["mail_port"],
                                        timeout=timeout, context=context)
         else:
@@ -211,6 +217,11 @@ class TaskEmail(CalibreTask):
             self.asyncSMTP.set_debuglevel(1)
         if use_ssl == 1:
             context = ssl.create_default_context()
+
+            if use_unverified:
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+
             self.asyncSMTP.starttls(context=context)
         if self.settings["mail_password_e"]:
             self.asyncSMTP.login(str(self.settings["mail_login"]), str(self.settings["mail_password_e"]))

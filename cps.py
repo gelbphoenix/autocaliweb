@@ -28,4 +28,13 @@ sys.path.insert(0, path)
 from cps.main import main
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        try:
+            from cps import web_server
+            web_server.stop()
+        except Exception:
+            pass
+        print("Recieved interrupt, shutting down")
+        sys.exit(0)

@@ -216,6 +216,13 @@ class WebServer(object):
         try:
             sock, output = self._make_gevent_listener()
             log.info('Starting Gevent server on %s', output)
+            
+            try:
+                print(f"Server started on {output}")
+            except Exception:
+                print(f"Error {output}")
+                pass
+
             self.wsgiserver = WSGIServer(sock, self.app, log=self.access_logger, handler_class=MyWSGIHandler,
                                          error_log=log,
                                          spawn=Pool(), **ssl_args)
@@ -263,6 +270,12 @@ class WebServer(object):
                 output = _readable_listen_address(self.listen_address, self.listen_port)
                 http_server.listen(self.listen_port, self.listen_address)
             log.info('Starting Tornado server on %s', output)
+
+            try:
+                print(f"Server started on {output}")
+            except Exception:
+                print(f"Error {output}")
+                pass
 
             self.wsgiserver = IOLoop.current()
             self.wsgiserver.start()

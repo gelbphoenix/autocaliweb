@@ -18,6 +18,7 @@ except ImportError:
 
 from cps.services.Metadata import MetaRecord, MetaSourceInfo, Metadata
 import cps.logger as logger
+from cps.constants import USER_AGENT
 
 #from time import time
 from operator import itemgetter
@@ -28,7 +29,7 @@ class Amazon(Metadata):
     __name__ = "Amazon"
     __id__ = "amazon"
     headers = {
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:143.0) Gecko/20100101 Firefox/143.0',
+        'User-Agent': USER_AGENT,
         'Accept': '*/*',
         'Accept-Encoding': 'gzip, deflate, br, zstd',
     }

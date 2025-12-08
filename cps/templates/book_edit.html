@@ -124,7 +124,7 @@
     {% endif %}
     <div class="form-group">
       <label for="rating">{{_('Rating')}}</label>
-      <input type="number"  name="rating" id="rating" class="rating input-lg" data-clearable="" value="{% if book.ratings %}{{(book.ratings[0].rating / 2)|int}}{% endif %}">
+      <input type="number"  name="rating" id="rating" class="rating input-lg" data-clearable="" value="{% if book.ratings %}{{(book.ratings[0].rating / 2)|int}}{% endif %}"/>
     </div>
     <label for="pubdate">{{_('Published Date')}}</label>
     <div class="form-group input-group">

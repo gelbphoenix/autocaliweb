@@ -1191,6 +1191,7 @@ def HandleInitRequest():
         try:
             plus_enabled = bool(getattr(current_user, "kobo_plus", False))
             borrow_enabled = bool(getattr(current_user, "kobo_overdrive", False))
+            audiobooks_enabled = bool(getattr(current_user, "kobo_audiobooks", False))
             ip_enabled = bool(getattr(current_user, "kobo_instapaper", False))
         except AttributeError:
             pass
@@ -1227,6 +1228,7 @@ def HandleInitRequest():
             kobo_resources["reading_services_host"] = calibre_web_url
         kobo_resources["kobo_subscriptions_enabled"] = plus_enabled
         kobo_resources["kobo_nativeborrow_enabled"] = borrow_enabled
+        kobo_resources["kobo_audiobooks_enabled"] = audiobooks_enabled
         kobo_resources["instapaper_enabled"] = ip_enabled
         if ip_enabled:
             log.debug('Kobo: Instapaper integration enabled, checking endpoints')
@@ -1257,6 +1259,7 @@ def HandleInitRequest():
             kobo_resources["reading_services_host"] = url_for("web.index", _external=True).strip("/")
         kobo_resources["kobo_subscriptions_enabled"] = plus_enabled
         kobo_resources["kobo_nativeborrow_enabled"] = borrow_enabled
+        kobo_resources["kobo_audiobooks_enabled"] = audiobooks_enabled
         kobo_resources["instapaper_enabled"] = ip_enabled
         if ip_enabled:
             log.debug('Kobo: Instapaper integration enabled, checking endpoints')

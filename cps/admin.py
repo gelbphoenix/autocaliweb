@@ -518,6 +518,8 @@ def edit_list_user(param):
                     user.kobo_plus = int(vals['value'] == 'true')
                 elif param == 'kobo_overdrive':
                     user.kobo_overdrive = int(vals['value'] == 'true')
+                elif param == 'kobo_audiobooks':
+                    user.kobo_audiobooks = int(vals['value'] == 'true')
                 elif param == 'kobo_instapaper':
                     user.kobo_instapaper = int(vals['value'] == 'true')
                 elif param == 'kindle_mail':
@@ -2043,6 +2045,7 @@ def _handle_new_user(to_save, content, languages, translations, kobo_support):
         content.kobo_only_shelves_sync = to_save.get("kobo_only_shelves_sync", 0) == "on"
         content.kobo_plus = to_save.get("kobo_plus", 0) == "on"
         content.kobo_overdrive = to_save.get("kobo_overdrive", 0) == "on"
+        content.kobo_audiobooks = to_save.get("kobo_audiobooks", 0) == "on"
         content.kobo_instapaper = to_save.get("kobo_instapaper", 0) == "on"
         ub.session.add(content)
         ub.session.commit()
@@ -2129,6 +2132,7 @@ def _handle_edit_user(to_save, content, languages, translations, kobo_support):
             kobo_sync_status.update_on_sync_shelfs(content.id)
         content.kobo_plus = int(to_save.get("kobo_plus") == "on") or 0
         content.kobo_overdrive = int(to_save.get("kobo_overdrive") == "on") or 0
+        content.kobo_audiobooks = int(to_save.get("kobo_audiobooks") == "on") or 0
         content.kobo_instapaper = int(to_save.get("kobo_instapaper") == "on") or 0
         content.auto_send_enabled = to_save.get("auto_send_enabled") == "on"
         content.auto_metadata_fetch = to_save.get("auto_metadata_fetch") == "on"

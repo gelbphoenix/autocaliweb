@@ -1257,7 +1257,7 @@ def HandleInitRequest():
                                                                height="{height}",
                                                                isGreyscale='false',
                                                                _external=True))
-        if config.config_hardcover_annotations_sync and bool(hardcover):
+        if config.config_hardcover_annosync and bool(hardcover):
             kobo_resources["reading_services_host"] = url_for("web.index", _external=True).strip("/")
         kobo_resources["kobo_subscriptions_enabled"] = plus_enabled
         kobo_resources["kobo_nativeborrow_enabled"] = borrow_enabled

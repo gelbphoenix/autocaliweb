@@ -119,7 +119,7 @@ def requires_reading_services_auth_and_config(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         # Check if annotation sync is enabled
-        if not config.config_hardcover_annotations_sync:
+        if not config.config_hardcover_annosync:
             log.debug("Kobo annotation sync disabled, proxying to Kobo")
             return proxy_to_kobo_reading_services()
         
@@ -438,7 +438,7 @@ def process_annotation_for_sync(annotation: KoboAnnotation, book: db.Books, iden
 
     # Sync to Hardcover if enabled and user has valid token
     if (config.config_kobo_sync and
-        config.config_hardcover_annotations_sync and
+        config.config_hardcover_annosync and
         bool(hardcover)):
         if identifiers:
             log.info(f"Syncing annotation to Hardcover with identifiers: {identifiers}")

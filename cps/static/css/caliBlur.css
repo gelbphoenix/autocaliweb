@@ -674,12 +674,12 @@ div[aria-label="Download, send to Kindle, reading"]
 }
 
 #archived_cb:checked + label:before {
-  content: "\e020";
+  content: "\e118";
   color: var(--color-primary);
 }
 
 #archived_cb + label:before {
-  content: "\e020";
+  content: "\e118";
   color: hsla(0, 0%, 100%, 0.7);
 }
 

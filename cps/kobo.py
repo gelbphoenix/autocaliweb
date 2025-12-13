@@ -34,7 +34,8 @@ from flask import (
     current_app,
     url_for,
     redirect,
-    abort
+    abort,
+    Response
 )
 from .cw_login import current_user
 from werkzeug.datastructures import Headers
@@ -116,20 +117,20 @@ def redirect_or_proxy_request(auth=False):
                 # The Kobo device turns other request types into GET requests on redirects,
                 # so we instead proxy to the Kobo store ourselves.
                 store_response = make_request_to_kobo_store()
-
-                response_headers = store_response.headers
-                for header_key in CONNECTION_SPECIFIC_HEADERS:
-                    response_headers.pop(header_key, default=None)
-
-                return make_response(
-                    store_response.content, store_response.status_code, response_headers.items()
-                )
+                return make_proxy_response(store_response)
         except Exception as e:
             log.error("Failed to receive or parse response from Kobo's endpoint: {}".format(e))
             if auth:
                 return make_calibre_web_auth_response()
     return make_response(jsonify({}))
 
+def make_proxy_response(store_response: requests.Response) -> Response:
+    headers = store_response.headers
+
+    for key in CONNECTION_SPECIFIC_HEADERS:
+        headers.pop(key, default=None)
+
+    return make_response(store_response.content, store_response.status_code, headers.items())
 
 def convert_to_kobo_timestamp_string(timestamp):
     try:
@@ -906,17 +907,7 @@ def HandleStateRequest(book_uuid):
             ub.session.rollback()
             abort(400, description="Malformed request data is missing 'ReadingStates' key")
 
-        if config.config_hardcover_sync and bool(hardcover):
-            # Check blacklist status of book
-            blacklist = ub.session.query(ub.HardcoverBookBlacklist).filter(
-                ub.HardcoverBookBlacklist.book_id == book.id
-            ).first()
-
-            if blacklist and blacklist.blacklist_reading_progress:
-                log.debug(f"Skipping reading progress sync for book {book.id} - blacklisted for reading progress")
-            else:
-                hardcoverClient = hardcover.HardcoverClient(current_user.hardcover_token)
-                hardcoverClient.update_reading_progress(book.identifiers, request_bookmark["ProgressPercent"])
+        push_reading_state_to_hardcover(book, request_bookmark)
 
         ub.session.merge(kobo_reading_state)
         ub.session_commit()
@@ -924,6 +915,43 @@ def HandleStateRequest(book_uuid):
             "RequestResult": "Success",
             "UpdateResults": [update_results_response],
         })
+
+
+def push_reading_state_to_hardcover(book: db.Books, request_bookmark: dict):
+    """
+    Sync reading progress to Hardcover if enabled for the user and book is not blacklisted.
+
+    Most exceptions are caught and logged so that issues with Hardcover do not prevent
+    the Kobo from clearing its reading state sync queue.
+
+    :param book: The book for which to sync reading progress.
+    :param request_bookmark: The bookmark data from the Kobo request.
+    :return: None
+    """
+    if not config.config_hardcover_sync or not bool(hardcover):
+        return
+    
+    blacklist = ub.session.query(ub.HardcoverBookBlacklist).filter(
+        ub.HardcoverBookBlacklist.book_id == book.id
+    ).first()
+
+    if blacklist and blacklist.blacklist_reading_progress:
+        log.debug(f"Skipping reading progress sync for book {book.id} - blacklisted for reading progress")
+        return
+    
+    try:
+        hardcoverClient = hardcover.HardcoverClient(current_user.hardcover_token)
+    except hardcover.MissingHardcoverToken:
+        log.info(f"User {current_user.name} has no token for Hardcover configured, no syncing to Hardcover.")
+        return
+    except Exception as e:
+        log.error(f"Failed to create Hardcover client for user {current_user.name}: {e}")
+        return
+    
+    try:
+        hardcoverClient.update_reading_progress(book.identifiers, request_bookmark["ProgressPercent"])
+    except Exception as e:
+        log.error(f"Failed to update progress for book {book.id} in Hardcover: {e}")
 
 
 def get_read_status_for_kobo(ub_book_read):
@@ -1077,8 +1105,7 @@ def HandleBookDeletionRequest(book_uuid):
 @kobo.route("/v1/library/<dummy>", methods=["DELETE", "GET", "POST"])
 @kobo.route("/v1/library/<dummy>/preview", methods=["POST"])
 def HandleUnimplementedRequest(dummy=None):
-    log.debug("Unimplemented Library Request received: %s (request is forwarded to kobo if configured)",
-              request.base_url)
+    log.debug("Unimplemented Library Request received: %s (%s)", request.base_url, "forwarded to Kobo Store" if config.config_kobo_proxy else "returning empty response")
     return redirect_or_proxy_request()
 
 
@@ -1090,8 +1117,10 @@ def HandleUnimplementedRequest(dummy=None):
 @kobo.route("/v1/user/recommendations", methods=["GET", "POST"])
 @kobo.route("/v1/analytics/<dummy>", methods=["GET", "POST"])
 @kobo.route("/v1/assets", methods=["GET"])
+@kobo.route("/v2/user/tasteprofile/genre", methods=["GET", "POST"])
+@kobo.route("/v2/user/tasteprofile/complete", methods=["GET", "POST"])
 def HandleUserRequest(dummy=None):
-    log.debug("Unimplemented User Request received: %s (request is forwarded to kobo if configured)", request.base_url)
+    log.debug("Unimplemented User Request received: %s (%s)", request.base_url, "forwarded to Kobo Store" if config.config_kobo_proxy else "returning empty response")
     return redirect_or_proxy_request()
 
 
@@ -1134,6 +1163,10 @@ def handle_getests():
 @kobo.route("/v1/deals", methods=["GET", "POST"])
 @kobo.route("/v1/categories/<dummy>", methods=["GET", "POST"])
 @kobo.route("/v1/categories/<dummy>/featured", methods=["GET", "POST"])
+@kobo.route("/v2/products", methods=["GET", "POST"])
+@kobo.route("/v2/products/<path:dummy>", methods=["GET", "POST"])
+@kobo.route("/v2/products/<path:dummy>/", methods=["GET", "POST"])
+@kobo.route("/api/v2/Categories/Top", methods=["GET", "POST"])
 def HandleProductsRequest(dummy=None):
     log.debug("Unimplemented Products Request received: %s (request is forwarded to kobo if configured)",
               request.base_url)
@@ -1182,11 +1215,23 @@ def HandleInitRequest():
         try:
             store_response = make_request_to_kobo_store()
             store_response_json = store_response.json()
+
+            if rs := store_response_json.get("ResponseStatus", {}):
+                if ec := rs.get("ErrorCode", ""):
+                    msg = rs.get("Message", "(No message provided)")
+                    if ec == "ExpiredToken":
+                        log.info(f"Kobo Store session expired: {msg}. Reauthentication triggered.")
+                        return make_proxy_response(store_response)
+                    log.warning(f"Kobo: Kobo Store initialization returned error code {ec}: {msg}")
+
             if "Resources" in store_response_json:
                 kobo_resources = store_response_json["Resources"]
-        except Exception:
-            log.error("Failed to receive or parse response from Kobo's init endpoint. Falling back to un-proxied mode.")
+            else:
+                log.error(f"Kobo: Kobo Store initialization response missing 'Resources' field.")
+        except Exception as e:
+            log.error(f"Failed to receive or parse response from Kobo's initialization endpoint: {e}")
     if not kobo_resources:
+        log.debug("Using fallback Kobo recource definitions")
         kobo_resources = NATIVE_KOBO_RESOURCES()
 
     if current_user is not None:

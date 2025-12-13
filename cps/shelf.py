@@ -102,9 +102,14 @@ def add_to_shelf(shelf_id, book_id):
         else:
             return redirect(url_for('web.index'))
     if shelf.kobo_sync and config.config_hardcover_sync and bool(hardcover):
-        hardcoverClient = hardcover.HardcoverClient(current_user.hardcover_token)
-        if not hardcoverClient.get_user_book(book.identifiers):
-            hardcoverClient.add_book(book.identifiers)
+        try:
+            hardcoverClient = hardcover.HardcoverClient(current_user.hardcover_token)
+            if not hardcoverClient.get_user_book(book.identifiers):
+                hardcoverClient.add_book(book.identifiers)
+        except hardcover.MissingHardcoverToken:
+            log.info(f"User {current_user.name} has no token for Hardcover configured, cannot add to Hardcover.")
+        except Exception as e:
+            log.debug(f"Failed to create Hardcover client for user {current_user.name}: {e}")
     return "", 204
 
 

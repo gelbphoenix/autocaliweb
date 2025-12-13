@@ -64,8 +64,15 @@ def escape_md(text):
     
     return text
 
+class MissingHardcoverToken(Exception):
+    """Exception raised when Hardcover API token is missing."""
+    pass
+
 class HardcoverClient:
     def __init__(self, token):
+        if not token:
+            raise MissingHardcoverToken("Hardcover API token is required")
+
         self.endpoint = GRAPHQL_ENDPOINT
 
         self.headers = {
@@ -73,7 +80,11 @@ class HardcoverClient:
             "Authorization" : f"Bearer {token}",
             "User-Agent": constants.USER_AGENT,
         }
-        self.privacy = self.get_privacy()
+        try:
+            self.privacy = self.get_privacy()
+        except Exception as e:
+            log.error(f"Error fetching Hardcover account privacy setting: {e}")
+            raise
         
     def get_privacy(self):
         query = """
@@ -87,6 +98,7 @@ class HardcoverClient:
 
     def get_user_book(self, ids):
         if not ids or not any(key in self.parse_identifiers(ids) for key in ["hardcover-edition", "hardcover-id", "hardcover"]):
+            log.warning("No Hardcover identifiers found for book, skipping syncing to Hardcover.")
             return None
 
         query = ""
@@ -280,8 +292,7 @@ class HardcoverClient:
         variables = {
             "bookId": int(book.get("book_id")),
             "entry": journal_text,
-            # quote or note in Hardcover, 
-            "event": "note" if note_text else "quote",
+            "event": "note" if note_text else "quote", # quote or note in Hardcover, 
             "privacySettingId": self.privacy,
             "editionId": int(book.get("edition", {}).get("id")) if book.get("edition") else None,
             "tags": [
@@ -363,8 +374,7 @@ class HardcoverClient:
         variables = {
             "journalId": journal_id,
             "entry": journal_text,
-            # quote or note in Hardcover, 
-            "event": "note" if note_text else "quote",
+            "event": "note" if note_text else "quote", # quote or note in Hardcover, 
         }
         try:
             response = self.execute(query=mutation, variables=variables)
@@ -400,6 +410,16 @@ class HardcoverClient:
             return None
 
     def delete_journal_entry(self, journal_id: int):
+        """
+        Delete a journal entry from Hardcover.
+
+        Args:
+            journal_id: The ID of the journal entry to delete
+
+        Returns:
+            The deleted journal entry ID or None if failed
+        """
+
         mutation = """
             mutation ($journal_id: Int!) {
                 delete_reading_journal(id: $journal_id) {
@@ -407,6 +427,7 @@ class HardcoverClient:
                 }
             }"""
         variables = {"journal_id": journal_id}
+        
         response = self.execute(query=mutation, variables=variables)
         return response.get("delete_reading_journal", {}).get("id")
     

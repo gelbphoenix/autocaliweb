@@ -142,7 +142,7 @@
       <input type="checkbox" id="auto_metadata_fetch_enabled" name="auto_metadata_fetch_enabled" value="True" style="accent-color: var(--color-secondary);" data-toggle="tooltip" data-placement="right" title="Automatically fetches metadata for newly ingested books">
       {% endif %}
       <label for="auto_metadata_fetch_enabled" style="padding-left: 10px;">{{_('Enable Automatic Metadata Fetching for New Books')}}</label><br>
-      <p class="cwa-settings-tooltip">
+      <p class="acw-settings-tooltip">
         {{_('When active, CWA will automatically attempt to fetch and apply metadata (title, author, description, cover, etc.) for newly ingested books using the configured metadata provider hierarchy. This helps improve the quality of book information, especially for books with poor or missing metadata.')}}
       </p>
 
@@ -152,7 +152,7 @@
       <input type="checkbox" id="auto_metadata_smart_application" name="auto_metadata_smart_application" value="True" style="accent-color: var(--color-secondary);" data-toggle="tooltip" data-placement="right" title="Apply intelligent criteria when replacing existing metadata">
       {% endif %}
       <label for="auto_metadata_smart_application" style="padding-left: 10px;">{{_('Enable Smart Metadata Application')}}</label><br>
-      <p class="cwa-settings-tooltip">
+      <p class="acw-settings-tooltip">
         {{_('When enabled, fetched metadata will only replace existing data if it appears to be better quality (e.g., longer descriptions, higher resolution covers). When disabled, fetched metadata will replace existing data as-is from the preferred provider.')}}
       </p>
     </div>

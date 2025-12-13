@@ -17,7 +17,7 @@ import base64
 from datetime import datetime, timezone
 from typing import Dict, Optional, Any, Tuple
 
-from flask import Blueprint, request, jsonify, g, render_template
+from flask import Blueprint, request, jsonify, g
 from flask_babel import gettext as _
 from werkzeug.security import check_password_hash
 from sqlalchemy import func
@@ -25,6 +25,7 @@ from sqlalchemy import func
 from . import logger, ub, config, csrf, constants, services
 from .cw_login import current_user
 from .usermanagement import user_login_required
+from .render_template import render_title_template
 
 log = logger.create()
 
@@ -145,7 +146,7 @@ def kosync_plugin_page():
     """
     Display the KOReader plugin download and installation page
     """
-    return render_template("kosync_plugin.html", title=_("KOReader Sync Plugin"))
+    return render_title_template("kosync_plugin.html", title=_("KOReader Sync Plugin"))
 
 
 @csrf.exempt

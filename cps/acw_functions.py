@@ -336,7 +336,7 @@ def acw_stats_show():
     data_epub_fixer = acw_db.get_epub_fixer_history(fixes=False, verbose=False)
     data_epub_fixer_with_fixes = acw_db.get_epub_fixer_history(fixes=True, verbose=False)
 
-    return render_title_template("acw_stats.html", title=_("Autocaliweb Sever Stats & Archive"), page="acw-stats",
+    return render_title_template("acw_stats.html", title=_("Autocaliweb Server Stats & Archive"), page="acw-stats",
                                 acw_stats=get_acw_stats(),
                                 data_enforcement=data_enforcement, headers_enforcement=headers["enforcement"]["no_paths"], 
                                 data_enforcement_with_paths=data_enforcement_with_paths,headers_enforcement_with_paths=headers["enforcement"]["with_paths"], 

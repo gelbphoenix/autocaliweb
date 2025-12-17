@@ -626,6 +626,10 @@ def filename(context):
         return context.get_current_parameters()['uuid'] + '.' + file_format
 
 
+def default_expiration():
+    return datetime.now(timezone.utc) + timedelta(days=10)
+
+
 class Thumbnail(Base):
     __tablename__ = 'thumbnail'
 
@@ -637,7 +641,7 @@ class Thumbnail(Base):
     resolution = Column(SmallInteger, default=constants.COVER_THUMBNAIL_SMALL)
     filename = Column(String, default=filename)
     generated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    expiration = Column(DateTime, nullable=True)
+    expiration = Column(DateTime, default=default_expiration)
 
 
 # Add missing tables during migration of database

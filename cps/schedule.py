@@ -22,7 +22,7 @@ from . import config, constants
 from .services.background_scheduler import BackgroundScheduler, CronTrigger, use_APScheduler
 from .tasks.database import TaskReconnectDatabase
 from .tasks.clean import TaskClean
-from .tasks.thumbnail import TaskGenerateCoverThumbnails, TaskGenerateSeriesThumbnails, TaskClearCoverThumbnailCache
+from .tasks.thumbnail import TaskGenerateCoverThumbnails, TaskGenerateSeriesThumbnails, TaskClearCoverThumbnailCache, TaskCleanupExpiredThumbnails
 from .services.worker import WorkerThread
 from .tasks.metadata_backup import TaskBackupMetadata
 
@@ -47,6 +47,9 @@ def get_scheduled_tasks(reconnect=True):
     # Generate all missing series thumbnails
     if config.schedule_generate_series_covers:
         tasks.append([lambda: TaskGenerateSeriesThumbnails(), 'generate book covers', False])
+
+    # Cleanup expired thumbnails
+    tasks.append([lambda: TaskCleanupExpiredThumbnails(), 'cleanup expired thumbnails', True])
 
     return tasks
 

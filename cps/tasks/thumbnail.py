@@ -20,7 +20,7 @@ import os
 from shutil import copyfile, copyfileobj
 from urllib.request import urlopen
 from io import BytesIO
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from .. import constants
 from cps import config, db, fs, gdriveutils, logger, ub, app
@@ -165,8 +165,10 @@ class TaskGenerateCoverThumbnails(CalibreTask):
                     
                     try:
                         self.cache.delete_cache_file(old_filename, constants.CACHE_TYPE_THUMBNAILS)
-                    except Exception:
+                    except FileNotFoundError:
                         pass
+                    except OSError as e:
+                        self.log.error(f"Failed to delete old thumbnail {old_filename}: {e}")
 
                     generated += 1
                     
@@ -188,6 +190,8 @@ class TaskGenerateCoverThumbnails(CalibreTask):
         thumbnail.entity_id = book.id
         thumbnail.format = fmt
         thumbnail.resolution = resolution
+        thumbnail.generated_at = datetime.now(timezone.utc)
+        thumbnail.expiration = datetime.now(timezone.utc) + timedelta(days=10)
 
         self.app_db_session.add(thumbnail)
         try:
@@ -200,40 +204,14 @@ class TaskGenerateCoverThumbnails(CalibreTask):
 
 
     def create_book_cover_single_thumbnail(self, book, resolution):
-        # Create a jpg thumbnail (for Kobo devices)
-        thumbnail_jpg = ub.Thumbnail()
-        thumbnail_jpg.type = constants.THUMBNAIL_TYPE_COVER
-        thumbnail_jpg.entity_id = book.id
-        thumbnail_jpg.format = 'jpg'
-        thumbnail_jpg.resolution = resolution
+        formats = ['jpg', 'webp']
+        for fmt in formats:
+            self.create_book_cover_single_thumbnail_format(book, resolution, fmt)
 
-        self.app_db_session.add(thumbnail_jpg)
-        try:
-            self.app_db_session.commit()
-            self.generate_book_thumbnail(book, thumbnail_jpg)
-        except Exception as ex:
-            self.log.debug('Error creating JPG book thumbnail: ' + str(ex))
-            self._handleError('Error creating JPG book thumbnail: ' + str(ex))
-            self.app_db_session.rollback()
-
-        # Create a webp thumbnail (for web display)
-        thumbnail_webp = ub.Thumbnail()
-        thumbnail_webp.type = constants.THUMBNAIL_TYPE_COVER
-        thumbnail_webp.entity_id = book.id
-        thumbnail_webp.format = 'webp'
-        thumbnail_webp.resolution = resolution
-
-        self.app_db_session.add(thumbnail_webp)
-        try:
-            self.app_db_session.commit()
-            self.generate_book_thumbnail(book, thumbnail_webp)
-        except Exception as ex:
-            self.log.debug('Error creating WEBP book thumbnail: ' + str(ex))
-            self._handleError('Error creating WEBP book thumbnail: ' + str(ex))
-            self.app_db_session.rollback()
 
     def update_book_cover_thumbnail(self, book, thumbnail):
         thumbnail.generated_at = datetime.now(timezone.utc)
+        thumbnail.expiration = datetime.now(timezone.utc) + timedelta(days=10)
 
         try:
             self.app_db_session.commit()
@@ -409,6 +387,8 @@ class TaskGenerateSeriesThumbnails(CalibreTask):
         thumbnail.entity_id = series.id
         thumbnail.format = 'jpeg'
         thumbnail.resolution = resolution
+        thumbnail.generated_at = datetime.now(timezone.utc)
+        thumbnail.expiration = datetime.now(timezone.utc) + timedelta(days=10)
 
         self.app_db_session.add(thumbnail)
         try:
@@ -421,6 +401,7 @@ class TaskGenerateSeriesThumbnails(CalibreTask):
 
     def update_series_thumbnail(self, series_books, thumbnail):
         thumbnail.generated_at = datetime.now(timezone.utc)
+        thumbnail.expiration = datetime.now(timezone.utc) + timedelta(days=10)
 
         try:
             self.app_db_session.commit()
@@ -592,6 +573,113 @@ class TaskClearCoverThumbnailCache(CalibreTask):
         else:
             return "Delete Thumbnail cache directory"
 
+    @property
+    def is_cancellable(self):
+        return False
+
+
+class TaskCleanupExpiredThumbnails(CalibreTask):
+    """
+    Deletes expired thumbnails and related database entries
+    """
+
+    def __init__(self, message=N_("Cleanup expired thumbnails")):
+        super().__init__(message)
+        self.log = logger.create()
+        self.app_db_session = ub.get_new_session_instance()        
+        self.cache = fs.FileSystem()
+
+    def run(self, worker_thread):
+        self.message = "Cleaning up expired thumbnails"
+        deleted_count = 0
+        freed_space = 0
+        skipped_count = 0
+        batch_size = 1000
+        offset = 0
+
+        # for migration
+        migrated_count = 0
+
+        try:
+            with app.app_context():
+                while True:
+                    old_thumbs = (self.app_db_session.query(ub.Thumbnail)
+                                .filter(ub.Thumbnail.expiration.is_(None))
+                                .limit(batch_size)
+                                .offset(offset)
+                                .all())
+                    
+                    if not old_thumbs:
+                        break
+
+                    for thumbnail in old_thumbs:
+                        thumbnail.expiration = datetime.now(timezone.utc) + timedelta(days=1)
+                        migrated_count += 1
+                        
+                    self.app_db_session.commit()
+                    self.log.debug(f"Migrated batch: {len(old_thumbs)} old thumbnails")
+                    offset += batch_size
+
+                offset = 0
+
+                while True:
+                    expired = self.app_db_session.query(ub.Thumbnail).filter(
+                        (ub.Thumbnail.expiration.isnot(None)) & 
+                        (ub.Thumbnail.expiration <= datetime.now(timezone.utc))
+                    ).limit(batch_size).offset(offset).all()
+
+                    if not expired:
+                        break
+
+                    self.log.debug(f"Processing batch: {len(expired)} thumbnails")
+
+                    for thumb in expired:
+                        try:
+                            if self.cache.get_cache_file_exists(thumb.filename, constants.CACHE_TYPE_THUMBNAILS):
+                                filepath = self.cache.get_cache_file_path(thumb.filename, constants.CACHE_TYPE_THUMBNAILS)
+                                
+                                try:
+                                    freed_space += os.path.getsize(filepath)
+                                except OSError:
+                                    pass
+                                
+                                self.cache.delete_cache_file(thumb.filename, constants.CACHE_TYPE_THUMBNAILS)
+
+                                self.app_db_session.delete(thumb)
+                                deleted_count += 1
+                        except Exception as e:
+                            self.log.error(f"Error deleting thumbnail {thumb.filename}: {e}")
+                            skipped_count += 1
+
+                    self.app_db_session.commit()
+                    offset += batch_size
+
+            freed_mb = freed_space / (1024 * 1024)
+
+            parts = [f"Deleted {deleted_count} expired thumbnails"]
+            if migrated_count > 0:
+                parts.append(f"migrated {migrated_count} old thumbnails")
+            if skipped_count > 0:
+                parts.append(f"skipped {skipped_count}")
+            message = f"Cleanup complete: {', '.join(parts)} ({freed_mb:.2f}MB freed)"
+
+            self.log.info(message)
+        except Exception as e:
+            message = f"Cleanup failed: {e}"
+            self.log.error(message)
+            self._handleError(message)
+            self.app_db_session.rollback()
+            return
+
+        self._handleSuccess()
+
+    @property
+    def name(self):
+        return N_("Cleanup Expired Thumbnail")
+        
+    def __str__(self):
+        return "Cleanup expired Thumbnails"
+        
     @property
     def is_cancellable(self):
         return False

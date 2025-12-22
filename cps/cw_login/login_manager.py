@@ -11,6 +11,7 @@ from flask import has_app_context
 from flask import redirect
 from flask import request
 from flask import session
+from flask import has_request_context
 from itsdangerous import URLSafeSerializer
 from flask.json.tag import TaggedJSONSerializer
 
@@ -322,6 +323,8 @@ class LoginManager:
 
     def _load_user(self):
         """Loads user from session or remember_me cookie as applicable"""
+        if not has_request_context():
+            return
 
         if self._user_callback is None and self._request_callback is None:
             raise Exception(
@@ -340,6 +343,8 @@ class LoginManager:
 
         # Load user from Flask Session
         user_id = session.get("_user_id")
+        if not user_id:
+            return
         user_random = session.get("_random")
         user_session_key = session.get("_id")
         if (user_id is not None

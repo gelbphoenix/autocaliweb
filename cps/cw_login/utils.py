@@ -371,16 +371,47 @@ def set_login_view(login_view, blueprint=None):
 
 
 def _get_user():
-    if has_request_context():
-        if "flask_httpauth_user" in g:
-            if g.flask_httpauth_user is not None:
-                return g.flask_httpauth_user
-        if "_login_user" not in g:
+    """
+    Returns the current user for the active request context.
+
+    This function guarantees that a valid user-like object is always returned,
+    even when no user is authenticated, no session exists, or the request is
+    being processed during error handling or template rendering.
+
+    The lookup order is:
+    1. HTTPAuth user (if present on the request context)
+    2. User loaded from the session via the login manager
+    3. Anonymous user fallback
+
+    A lazy import is used for the Anonymous user implementation to avoid
+    circular import dependencies between authentication utilities and
+    user model definitions.
+
+    :return: The current user or an anonymous user instance.
+    :rtype: object
+    """
+    # Lazily import to avoid circular dependency
+    from cps.ub import Anonymous
+
+    if not has_request_context():
+        return Anonymous()
+
+    user = getattr(g, "flask_httpauth_user", None)
+    if user is not None:
+        return user
+
+    if not hasattr(g, "_login_user"):
+        try:
             current_app.login_manager._load_user()
+        except Exception:
+            pass
 
-        return g._login_user
+    user = getattr(g, "_login_user", None)
+    if user is None:
+        user = Anonymous()
+        g._login_user = user
 
-    return None
+    return user
 
 
 def _cookie_digest(payload, key=None):
@@ -411,7 +442,10 @@ def _create_identifier():
 
 
 def _user_context_processor():
-    return dict(current_user=_get_user())
+    try:
+        return dict(current_user=_get_user())
+    except Exception:
+        return {}
 
 
 def _secret_key(key=None):

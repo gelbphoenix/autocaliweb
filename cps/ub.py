@@ -802,6 +802,20 @@ def create_anonymous_user(_session):
         log.error_or_exception(e)
 
 
+def generate_fips_safe_password_hash(password):
+    try:
+        return generate_password_hash(password)
+    except ValueError as e:
+        if "digest" not in str(e).lower():
+            raise
+        # FIPS fallback
+        return generate_password_hash(
+            password,
+            method="pbkdf2:sha256",
+            salt_length=16
+        )
+
+
 # Generate User admin with admin123 password, and access to everything
 def create_admin_user(_session):
     user = User()
@@ -810,7 +824,7 @@ def create_admin_user(_session):
     user.role = constants.ADMIN_USER_ROLES
     user.sidebar_view = constants.ADMIN_USER_SIDEBAR
 
-    user.password = generate_password_hash(constants.DEFAULT_PASSWORD)
+    user.password = generate_fips_safe_password_hash(constants.DEFAULT_PASSWORD)
 
     _session.add(user)
     try:

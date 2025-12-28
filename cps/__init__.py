@@ -29,6 +29,10 @@ from flask import Flask
 from .MyLoginManager import MyLoginManager
 from flask_principal import Principal
 from werkzeug.middleware.proxy_fix import ProxyFix
+from flask.sessions import SecureCookieSessionInterface
+from itsdangerous import URLSafeTimedSerializer, Signer
+import hashlib
+import itsdangerous 
 
 from . import logger
 from .cli import CliParameter
@@ -83,9 +87,30 @@ mimetypes.add_type('text/rtf', '.rtf')
 
 log = logger.create()
 
+class SHA256SessionInterface(SecureCookieSessionInterface):
+    def get_signing_serializer(self, app):
+        if not app.secret_key:
+            return None
+        signer_kwargs = dict(
+            key_derivation='hmac',
+            digest_method=hashlib.sha256
+        )
+        return URLSafeTimedSerializer(
+            app.secret_key,
+            salt='cookie-session',
+            serializer=self.serializer,
+            signer_kwargs=signer_kwargs
+        )
+
+# Force itsdangerous to avoid SHA1 in FIPS environments.
+# itsdangerous lazily resolves SHA1 internally; this override
+# replaces it with SHA256 to remain FIPS-compliant.
+itsdangerous.signer._lazy_sha1 = hashlib.sha256
+
 app = Flask(__name__)
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
+    SESSION_USE_SIGNER=True,
     SESSION_COOKIE_SAMESITE='Lax',
     REMEMBER_COOKIE_SAMESITE='Strict',
     WTF_CSRF_SSL_STRICT=False,
@@ -121,6 +146,7 @@ else:
 
 
 def create_app():
+    Signer.default_digest_method = hashlib.sha256
     if csrf:
         csrf.init_app(app)
 
@@ -182,6 +208,7 @@ def create_app():
         cache_buster.init_cache_busting(app)
     log.info('Starting Autocaliweb...')
     Principal(app)
+    app.session_interface = SHA256SessionInterface()
     lm.init_app(app)
 
     web_server.init_app(app, config)

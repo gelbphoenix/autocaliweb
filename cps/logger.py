@@ -124,10 +124,6 @@ def setup(log_file, log_level=None):
         # avoid spamming the log with debug messages from libraries
         r.setLevel(log_level)
 
-    # Otherwise, name gets destroyed on Windows
-    if log_file != LOG_TO_STDERR and log_file != LOG_TO_STDOUT:
-        log_file = _absolute_log_file(log_file, DEFAULT_LOG_FILE)
-
     previous_handler = r.handlers[0] if r.handlers else None
     if previous_handler:
         # if the log_file has not changed, don't create a new handler

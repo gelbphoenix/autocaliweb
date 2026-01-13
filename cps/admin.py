@@ -1092,12 +1092,9 @@ def pathchooser():
         parent_dir = os.path.relpath(parent_dir) + os.path.sep
 
     files = []
-    if os.path.realpath(cwd) == os.path.realpath("/") \
-            or (sys.platform == "win32" and os.path.realpath(cwd)[1:] == os.path.realpath("/")[1:]):
+    if os.path.realpath(cwd) == os.path.realpath("/"):
         # we are in root
         parent_dir = ""
-        if sys.platform == "win32":
-            files = get_drives(cwd)
 
     try:
         folders = os.listdir(cwd)

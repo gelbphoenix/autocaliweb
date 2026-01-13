@@ -133,10 +133,6 @@ class CliParameter(object):
                         socket.inet_pton(socket.AF_INET6, self.ip_address)
                     else:
                         socket.inet_pton(socket.AF_INET, self.ip_address)
-                else:
-                    # on Windows python < 3.4, inet_pton is not available
-                    # inet_atom only handles IPv4 addresses
-                    socket.inet_aton(self.ip_address)
             except socket.error as err:
                 print(self.ip_address, ':', err)
                 sys.exit(1)

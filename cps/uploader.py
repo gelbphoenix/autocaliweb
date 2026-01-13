@@ -255,7 +255,6 @@ def pdf_preview(tmp_file_path, tmp_dir):
         return None
     except Exception as ex:
         log.warning('Cannot extract cover image, using default: %s', ex)
-        log.warning('On Windows this error could be caused by missing ghostscript')
         return None
 
 

@@ -12046,7 +12046,7 @@ select.acw-settings-select {
   }
 }
 
-/* Media Query for Mobile Screens or Thin Windows */
+/* Media Query for Mobile Screens */
 @media (max-width: 480px) {
   .acw_stats_container {
     grid-template-columns: 1fr; /* 1 column, 4 sections stacked vertically */

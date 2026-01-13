@@ -36,5 +36,5 @@ If there is a feature missing in Calibre-Web and you can't find a feature reques
 
 Open a new GitHub pull request with the patch. Ensure the PR description clearly describes the problem and solution. Include the relevant issue number if applicable. Also is it preferred that you sign your commit.
 
-Please check if your code runs with python 3. If possible and the feature is related to operating system functions, try to check it on Windows and Linux.
+Please check if your code runs with python 3. If possible and the feature is related to operating system functions, try to check it on Linux.
 You should check your code with ESLint before contributing, a configuration file can be found in the projects root folder.

@@ -902,7 +902,7 @@ def create_book_on_upload(modify_date, meta):
     title_dir = helper.get_valid_filename(title, chars=96)
     author_dir = helper.get_valid_filename(db_author.name, chars=96)
 
-    # combine path and normalize path from Windows systems
+    # combine path and normalize Windows path
     path = os.path.join(author_dir, title_dir).replace('\\', '/')
 
     try:

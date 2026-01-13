@@ -148,8 +148,6 @@ try:
                     log.info('Backing up existing and downloading updated metadata.db')
                     gdriveutils.downloadFile(None, "metadata.db", os.path.join(tmp_dir, "tmp_metadata.db"))
                     log.info('Setting up new DB')
-                    # prevent error on windows, as os.rename does on existing files, also allow cross hdd move
-                    move(os.path.join(tmp_dir, "tmp_metadata.db"), dbpath)
                     calibre_db.reconnect_db(config, ub.app_DB_path)
         except Exception as ex:
             log.error_or_exception(ex)

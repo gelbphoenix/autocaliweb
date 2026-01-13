@@ -496,12 +496,7 @@ def _migrate_table(session, orm_class, secret_key=None):
 
 
 def autodetect_calibre_binaries():
-    if sys.platform == "win32":
-        calibre_path = ["C:\\program files\\calibre\\",
-                        "C:\\program files(x86)\\calibre\\",
-                        "C:\\program files(x86)\\calibre2\\",
-                        "C:\\program files\\calibre2\\"]
-    elif sys.platform.startswith("freebsd"):
+    if sys.platform.startswith("freebsd"):
         calibre_path = ["/usr/local/bin/"]
     else:
         calibre_path = ["/opt/calibre/"]
@@ -520,20 +515,14 @@ def autodetect_calibre_binaries():
 
 
 def autodetect_converter_binary(calibre_path):
-    if sys.platform == "win32":
-        converter_path = os.path.join(calibre_path, "ebook-convert.exe")
-    else:
-        converter_path = os.path.join(calibre_path, "ebook-convert")
+    converter_path = os.path.join(calibre_path, "ebook-convert")
     if calibre_path and os.path.isfile(converter_path) and os.access(converter_path, os.X_OK):
         return converter_path
     return ""
 
 
 def autodetect_unrar_binary():
-    if sys.platform == "win32":
-        calibre_path = ["C:\\program files\\WinRar\\unRAR.exe",
-                        "C:\\program files(x86)\\WinRar\\unRAR.exe"]
-    elif sys.platform.startswith("freebsd"):
+    if sys.platform.startswith("freebsd"):
         calibre_path = ["/usr/local/bin/unrar"]
     else:
         calibre_path = ["/usr/bin/unrar"]
@@ -544,10 +533,7 @@ def autodetect_unrar_binary():
 
 
 def autodetect_kepubify_binary():
-    if sys.platform == "win32":
-        calibre_path = ["C:\\program files\\kepubify\\kepubify-windows-64Bit.exe",
-                        "C:\\program files(x86)\\kepubify\\kepubify-windows-64Bit.exe"]
-    elif sys.platform.startswith("freebsd"):
+    if sys.platform.startswith("freebsd"):
         calibre_path = ["/usr/local/bin/kepubify"]
     else:
         calibre_path = ["/opt/kepubify/kepubify-linux-64bit", "/opt/kepubify/kepubify-linux-32bit"]

@@ -36,7 +36,7 @@ If applicable, add screenshots to help explain your problem.
 
 **Environment (please complete the following information):**
 
-- OS: [e.g. Windows 10/Raspberry Pi OS]
+- OS: [e.g. Raspberry Pi OS]
 - Autocaliweb version: [e.g. 0.6.8 or 087c4c59 (git rev-parse --short HEAD)]:
 - Special Hardware: [e.g. Rasperry Pi Zero]
 - Browser: [e.g. Chrome 83.0.4103.97, Safari 13.3.7, Firefox 68.0.1 ESR]

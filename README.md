@@ -81,6 +81,9 @@ _This software is a fork of [Calibre-Web](https://github.com/janeczku/calibre-we
 
 ## Installation
 
+> [!NOTE]
+> Installation on Windows with Docker Desktop is not supported. Installation on Windows Subsystem for Linux (WSL) is on your own risk.
+
 ### Installation via Docker (recommended)
 
 #### Quick Install

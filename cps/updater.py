@@ -214,7 +214,7 @@ class Updater(threading.Thread):
         permission = None
         new_permissions = os.stat(root_dst_dir)
         log.debug('Performing Update on OS-System: %s', sys.platform)
-        change_permissions = not (sys.platform == "win32" or sys.platform == "darwin")
+        change_permissions = not sys.platform == "darwin"
         for src_dir, __, files in os.walk(root_src_dir):
             dst_dir = src_dir.replace(root_src_dir, root_dst_dir, 1)
             if not os.path.exists(dst_dir):

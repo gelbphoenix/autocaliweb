@@ -162,48 +162,22 @@ class WebServer(object):
         # Need to look at main module to determine how it was executed.
         __main__ = sys.modules["__main__"]
 
-        # The value of __package__ indicates how Python was called. It may
-        # not exist if a setuptools script is installed as an egg. It may be
-        # set incorrectly for entry points created with pip on Windows.
-        if getattr(__main__, "__package__", "") in ["", None] or (
-            os.name == "nt"
-            and __main__.__package__ == ""
-            and not os.path.exists(py_script)
-            and os.path.exists("{}.exe".format(py_script))
-        ):
-            # Executed a file, like "python app.py".
-            py_script = os.path.abspath(py_script)
-
-            if os.name == "nt":
-                # Windows entry points have ".exe" extension and should be
-                # called directly.
-                if not os.path.exists(py_script) and os.path.exists("{}.exe".format(py_script)):
-                    py_script += ".exe"
-
-                if (
-                        os.path.splitext(sys.executable)[1] == ".exe"
-                        and os.path.splitext(py_script)[1] == ".exe"
-                ):
-                    rv.pop(0)
-
-            rv.append(py_script)
+        # Executed a module, like "python -m module".
+        if sys.argv[0] == "-m":
+            args = sys.argv
         else:
-            # Executed a module, like "python -m module".
-            if sys.argv[0] == "-m":
-                args = sys.argv
+            if os.path.isfile(py_script):
+                # Rewritten by Python from "-m script" to "/path/to/script.py".
+                py_module = __main__.__package__
+                name = os.path.splitext(os.path.basename(py_script))[0]
+
+                if name != "__main__":
+                    py_module += ".{}".format(name)
             else:
-                if os.path.isfile(py_script):
-                    # Rewritten by Python from "-m script" to "/path/to/script.py".
-                    py_module = __main__.__package__
-                    name = os.path.splitext(os.path.basename(py_script))[0]
+                # Incorrectly rewritten by pydevd debugger from "-m script" to "script".
+                py_module = py_script
 
-                    if name != "__main__":
-                        py_module += ".{}".format(name)
-                else:
-                    # Incorrectly rewritten by pydevd debugger from "-m script" to "script".
-                    py_module = py_script
-
-                rv.extend(("-m", py_module.lstrip(".")))
+            rv.extend(("-m", py_module.lstrip(".")))
 
         rv.extend(args)
         if os.name == 'nt':

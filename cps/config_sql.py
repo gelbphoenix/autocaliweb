@@ -316,12 +316,9 @@ class ConfigSQL(object):
         :returns: `True` if the field has changed value
         """
         new_value = dictionary.get(field, default)
-        if new_value is None:
+        if new_value is None or (new_value == "" and not allow_empty):
             return False
 
-        if new_value == "" and not allow_empty:
-            return False
-        
         if field == "config_rarfile_location":
             if not is_allowed_unrar_path(new_value):
                 log.warning("Rejected unallowed unrar path: %s", new_value)

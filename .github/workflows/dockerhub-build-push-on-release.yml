@@ -13,6 +13,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set Build ID
+        run: echo "BUILD_ID=$(date +%Y%m%d%H%M%S)" >> $GITHUB_ENV
+
       - name: Set Repository Name
         run: echo "LOWER_REPO_NAME=$(echo ${GITHUB_REPOSITORY#*/} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
@@ -41,6 +44,7 @@ jobs:
           build-args: |
             BUILD_DATE=${{ github.event.repository.updated_at }}
             VERSION=${{ github.event.release.tag_name }}
+            BUILD_ID=${{ env.BUILD_ID }}
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/autocaliweb:${{ github.event.release.tag_name }}
             ${{ secrets.DOCKERHUB_USERNAME }}/autocaliweb:latest

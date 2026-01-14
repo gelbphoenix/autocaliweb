@@ -3,13 +3,23 @@ FROM ubuntu:22.04
 
 SHELL [ "/bin/bash", "-c" ]
 
-ARG BUILD_DATE 
+ARG BUILD_DATE
+ARG BUILD_ID
 ARG VERSION
 ARG DEBIAN_FRONTEND=noninteractive
 
 LABEL build_version="Version: ${VERSION}" \
       build_date="${BUILD_DATE}" \
       maintainer="gelbphoenix"
+
+LABEL org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.source="https://github.com/gelbphoenix/autocaliweb" \
+      org.opencontainers.image.licences="GPL-3.0" \
+      org.opencontainers.image.authors="gelbphoenix" \
+      org.opencontainers.image.title="Autocaliweb" \
+      org.opencontainers.image.description="Web managing platform for eBooks, eComics and PDFs" \
+      de.gelbphoenix.autocaliweb.buildid="${BUILD_ID}"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -18,7 +28,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_BREAK_SYSTEM_PACKAGES=1 \
     CALIBRE_DBPATH=/config \
-    UMASK=0002
+    UMASK=0002 \
+    S6_STAGE2_HOOK=/docker-mods
 
 USER root
 
@@ -40,27 +51,22 @@ RUN apt-get update && \
       libglx-mesa0 xz-utils sqlite3 \
       xdg-utils tzdata inotify-tools \
       netcat-openbsd binutils zip \
-      fonts-dejavu-core
-
-# Install S6-Overlay
-RUN export S6_OVERLAY_VERSION=$(curl -s https://api.github.com/repos/just-containers/s6-overlay/releases/latest | awk -F'"' '/tag_name/{print $4;exit}') && \
-    curl -Lo /tmp/s6-overlay-$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/aarch64/').tar.xz https://github.com/just-containers/s6-overlay/releases/download/${S6_OVERLAY_VERSION}/s6-overlay-$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/aarch64/').tar.xz && \
-    curl -Lo /tmp/s6-overlay-noarch.tar.xz https://github.com/just-containers/s6-overlay/releases/download/${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz && \
-    tar -C / -Jxpf /tmp/s6-overlay-$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/aarch64/').tar.xz && \
-    tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz
-
-ENV S6_STAGE2_HOOK=/docker-mods
+      fonts-dejavu-core && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /root/.cache /tmp/* /var/tmp/*
 
 # Install Autocaliweb
 COPY requirements.txt optional-requirements.txt /app/autocaliweb/
 
+# To ensure that docker-mods for calibre-web can be used
+RUN ln -s /app/autocaliweb /app/calibre-web
+
 RUN cd /app/autocaliweb && \
     python3 -m venv venv && \
     pip install -U pip wheel && \
-    pip install --find-links https://wheel-index.linuxserver.io/ubuntu/ \ 
+    pip install --find-links https://wheel-index.linuxserver.io/ubuntu/ \
     -r /app/autocaliweb/requirements.txt \
     -r /app/autocaliweb/optional-requirements.txt 
-
     
 COPY . /app/autocaliweb/
 
@@ -73,17 +79,21 @@ RUN cd /app/autocaliweb/koreader/plugins && \
     zip -r koplugin.zip acwsync.koplugin/ && \
     cp /app/autocaliweb/koreader/plugins/koplugin.zip /app/autocaliweb/cps/static
     
-RUN cp -r /app/autocaliweb/root/* / && \ 
+RUN cp -r /app/autocaliweb/root/* / && \
     rm -R /app/autocaliweb/root/ && \
     /app/autocaliweb/scripts/setup-acw.sh && \
     echo $VERSION >| /app/ACW_RELEASE
 
-# To ensure that docker-mods for calibre-web can be used
-RUN ln -s /app/autocaliweb /app/calibre-web
+# Install S6-Overlay
+RUN export S6_OVERLAY_VERSION=$(curl -s https://api.github.com/repos/just-containers/s6-overlay/releases/latest | awk -F'"' '/tag_name/{print $4;exit}') && \
+    curl --fail -Lo /tmp/s6-overlay-$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/aarch64/').tar.xz https://github.com/just-containers/s6-overlay/releases/download/${S6_OVERLAY_VERSION}/s6-overlay-$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/aarch64/').tar.xz && \
+    curl --fail -Lo /tmp/s6-overlay-noarch.tar.xz https://github.com/just-containers/s6-overlay/releases/download/${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz && \
+    tar -C / -Jxpf /tmp/s6-overlay-$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/aarch64/').tar.xz && \
+    tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz
 
 # Install kepubify
 RUN export KEPUBIFY_RELEASE=$(curl -s https://api.github.com/repos/pgaskin/kepubify/releases/latest | awk -F'"' '/tag_name/{print $4;exit}') && \
-    curl -Lo /usr/bin/kepubify "https://github.com/pgaskin/kepubify/releases/download/${KEPUBIFY_RELEASE}/kepubify-linux-$(uname -m | sed 's/x86_64/64bit/;s/aarch64/arm64/')" && \
+    curl --fail -Lo /usr/bin/kepubify "https://github.com/pgaskin/kepubify/releases/download/${KEPUBIFY_RELEASE}/kepubify-linux-$(uname -m | sed 's/x86_64/64bit/;s/aarch64/arm64/')" && \
     chmod +x /usr/bin/kepubify && \
     echo "$KEPUBIFY_RELEASE" >| /app/KEPUBIFY_RELEASE
 
@@ -91,7 +101,7 @@ RUN export KEPUBIFY_RELEASE=$(curl -s https://api.github.com/repos/pgaskin/kepub
 RUN mkdir -p /app/calibre && \
     CALIBRE_RELEASE=$(curl -s https://api.github.com/repos/kovidgoyal/calibre/releases/latest | awk -F'"' '/tag_name/{print $4;exit}') && \
     CALIBRE_VERSION=${CALIBRE_RELEASE#v} && \
-    curl -o /tmp/calibre.txz -L https://download.calibre-ebook.com/${CALIBRE_VERSION}/calibre-${CALIBRE_VERSION}-$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/arm64/').txz && \
+    curl --fail -o /tmp/calibre.txz -L https://download.calibre-ebook.com/${CALIBRE_VERSION}/calibre-${CALIBRE_VERSION}-$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/arm64/').txz && \
     tar xf /tmp/calibre.txz -C /app/calibre && \
     rm /tmp/calibre.txz && \
     /app/calibre/calibre_postinstall && \
@@ -101,12 +111,7 @@ RUN mkdir -p /app/calibre && \
 RUN apt-get purge -y \
     build-essential libldap2-dev \
     libsasl2-dev python3-dev && \
-    apt-get autoremove -y && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* \
-    /tmp/* \
-    /var/tmp/* \
-    /root/.cache
+    apt-get autoremove -y 
 
 COPY --from=ghcr.io/linuxserver/unrar:latest /usr/bin/unrar-ubuntu /usr/bin/unrar
 

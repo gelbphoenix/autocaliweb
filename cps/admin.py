@@ -1159,20 +1159,12 @@ def _config_string(to_save, x):
 
 
 def _config_string_allow_empty(to_save, x):
-    """Like _config_string, but allows clearing a value.
+    """Like _config_string, but allows clearing a value via an empty string.
 
-    ConfigSQL.set_from_dictionary ignores empty strings, which is generally
-    useful, but it prevents clearing path settings from the UI.
+    This uses ConfigSQL.set_from_dictionary(..., allow_empty=True) so the update
+    path stays consistent.
     """
-    if x in to_save:
-        new_value = strip_whitespaces(to_save.get(x, ""))
-        if new_value == "":
-            current_value = getattr(config, x, None)
-            if current_value != "":
-                setattr(config, x, "")
-                return True
-            return False
-    return _config_string(to_save, x)
+    return config.set_from_dictionary(to_save, x, lambda y: strip_whitespaces(y) if y else y, allow_empty=True)
 
 
 def _configuration_gdrive_helper(to_save):

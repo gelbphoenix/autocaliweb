@@ -306,16 +306,19 @@ class ConfigSQL(object):
     def get_scheduled_task_settings(self):
         return {k: v for k, v in self.__dict__.items() if k.startswith('schedule_')}
 
-    def set_from_dictionary(self, dictionary, field, convertor=None, default=None, encode=None):
+    def set_from_dictionary(self, dictionary, field, convertor=None, default=None, encode=None, allow_empty=False):
         """Possibly updates a field of this object.
         The new value, if present, is grabbed from the given dictionary, and optionally passed through a convertor.
+
+        By default empty strings are ignored ("" is treated like "not provided").
+        Set allow_empty=True to explicitly allow clearing a field to "".
 
         :returns: `True` if the field has changed value
         """
         new_value = dictionary.get(field, default)
-        if new_value is None or new_value == "":
+        if new_value is None or (new_value == "" and not allow_empty):
             return False
-        
+
         if field == "config_rarfile_location":
             if not is_allowed_unrar_path(new_value):
                 log.warning("Rejected unallowed unrar path: %s", new_value)

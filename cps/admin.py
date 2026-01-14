@@ -1158,6 +1158,15 @@ def _config_string(to_save, x):
     return config.set_from_dictionary(to_save, x, lambda y: strip_whitespaces(y) if y else y)
 
 
+def _config_string_allow_empty(to_save, x):
+    """Like _config_string, but allows clearing a value via an empty string.
+
+    This uses ConfigSQL.set_from_dictionary(..., allow_empty=True) so the update
+    path stays consistent.
+    """
+    return config.set_from_dictionary(to_save, x, lambda y: strip_whitespaces(y) if y else y, allow_empty=True)
+
+
 def _configuration_gdrive_helper(to_save):
     gdrive_error = None
     if to_save.get("config_use_google_drive"):
@@ -1845,11 +1854,11 @@ def _configuration_update_helper():
     try:
         reboot_required |= _config_int(to_save, "config_port")
         reboot_required |= _config_string(to_save, "config_trustedhosts")
-        reboot_required |= _config_string(to_save, "config_keyfile")
+        reboot_required |= _config_string_allow_empty(to_save, "config_keyfile")
         if config.config_keyfile and not os.path.isfile(config.config_keyfile):
             return _configuration_result(_('Keyfile Location is not Valid, Please Enter Correct Path'))
 
-        reboot_required |= _config_string(to_save, "config_certfile")
+        reboot_required |= _config_string_allow_empty(to_save, "config_certfile")
         if config.config_certfile and not os.path.isfile(config.config_certfile):
             return _configuration_result(_('Certfile Location is not Valid, Please Enter Correct Path'))
 

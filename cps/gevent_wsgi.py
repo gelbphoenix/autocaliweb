@@ -34,11 +34,16 @@ class MyWSGIHandler(WSGIHandler):
             delta = '%.6f' % (self.time_finish - self.time_start)
         else:
             delta = '-'
-        forwarded = self.environ.get('HTTP_X_FORWARDED_FOR', None)
+
+        environ = getattr(self, 'environ', None)
+        forwarded = environ.get('HTTP_X_FORWARDED_FOR') if isinstance(environ, dict) else None
         if forwarded:
             client_address = forwarded
         else:
-            client_address = self.client_address[0] if isinstance(self.client_address, tuple) else self.client_address
+            if isinstance(self.client_address, tuple):
+                client_address = self.client_address[0]
+            else:
+                client_address = self.client_address
         return '%s - - [%s] "%s" %s %s %s' % (
             client_address or '-',
             now,

@@ -227,7 +227,7 @@ body
 
   #main-nav + .col-sm-2 {
     position: fixed;
-    width: 240px;
+    width: 300px;
     height: calc(100% - 120px);
     left: 0;
     top: 120px;
@@ -244,7 +244,7 @@ body
     content: "";
     position: fixed;
     top: 60px;
-    left: 240px;
+    left: 300px;
     pointer-events: none;
   }
 }
@@ -400,7 +400,7 @@ body.blur .row-fluid .col-sm-10 {
   > div.col-sm-6.col-lg-6.col-xs-6
   > h2:before {
   content: "Reorder Shelf";
-  width: calc(100vw - 240px);
+  width: calc(100vw - 300px);
   height: 60px;
   margin: 0;
   padding-left: 25px;
@@ -414,7 +414,7 @@ body.blur .row-fluid .col-sm-10 {
   -webkit-margin-after: 0;
   position: fixed;
   top: 60px;
-  left: 240px;
+  left: 300px;
   text-align: left;
 }
 
@@ -541,7 +541,7 @@ body.shelforder > div.container-fluid > div.row-fluid > div.col-sm-10:before {
   line-height: 1;
   font-size: 6vw;
   position: fixed;
-  left: 240px;
+  left: 300px;
   top: 180px;
   width: calc(20% - 55px);
   text-align: center;
@@ -736,15 +736,15 @@ div[aria-label="Edit/Delete book"] > .btn > span:hover {
 }
 
 /* .book {
-    width: 225px;
-    max-width: 225px;
+    width: 285px;
+    max-width: 285px;
     position: relative !important;
     left: auto !important;
     top: auto !important;
     -webkit-transform: none !important;
     -ms-transform: none !important;
     transform: none !important;
-    min-width: 225px;
+    min-width: 285px;
     display: block
 } */
 
@@ -813,7 +813,7 @@ body
   > div.navbar-header
   > a {
   margin: 60px auto auto !important;
-  width: 240px;
+  width: 300px;
   height: 60px;
   text-align: left;
   color: var(--color-primary) !important;
@@ -1887,7 +1887,7 @@ body
 }
 
 body.me > div.container-fluid > div > div.col-sm-10 > div.discover {
-  left: 240px;
+  left: 300px;
   margin: 120px 0 0 20% !important;
   padding: 30px 15px 15px !important;
   width: calc(80% - 30px);
@@ -2177,7 +2177,7 @@ body > .container-fluid {
 
 body > div.container-fluid > div.row-fluid > div.col-sm-2 {
   position: absolute;
-  width: 240px;
+  width: 300px;
   height: calc(100% - 60px);
   left: 0;
   top: 60px;
@@ -2187,7 +2187,7 @@ body > div.container-fluid > div.row-fluid > div.col-sm-2 {
 }
 
 body > div.container-fluid > div.row-fluid > div.col-sm-10 {
-  width: calc(100vw - 237px);
+  width: calc(100vw - 285px);
   height: calc(100% - 60px);
   padding: 0;
   position: absolute;
@@ -2205,7 +2205,7 @@ body.me > div.container-fluid > div.row-fluid > div.col-sm-10:before {
   font-weight: 400;
   font-size: 6vw;
   position: fixed;
-  left: 240px;
+  left: 300px;
   top: 180px;
   width: calc(20% - 55px);
   text-align: center;
@@ -2366,12 +2366,12 @@ body > div.container-fluid > div > div.col-sm-10 > h3:first-of-type {
   font-weight: 400;
   position: fixed;
   top: 60px;
-  left: 240px;
+  left: 300px;
 }
 
 body > div.container-fluid > div > div.col-sm-10 > h3:first-of-type {
   content: "About";
-  width: calc(100vw - 240px);
+  width: calc(100vw - 300px);
   text-align: left;
 }
 
@@ -2381,7 +2381,7 @@ body > div.container-fluid > div > div.col-sm-10 > h3:first-of-type {
 
 body > div.container-fluid > div > div.col-sm-10 > div:nth-of-type(2) > h2 {
   content: "Books";
-  width: calc(100vw - 240px);
+  width: calc(100vw - 300px);
 }
 
 .well > h2,
@@ -2391,7 +2391,7 @@ body:not(.admin)
   > div.col-sm-10
   > div.discover:only-of-type
   > h2 {
-  width: calc(100vw - 240px) !important;
+  width: calc(100vw - 300px) !important;
   height: 60px !important;
   padding-left: 25px !important;
   color: hsla(0, 0%, 100%, 0.7) !important;
@@ -2403,7 +2403,7 @@ body:not(.admin)
   font-weight: 400 !important;
   position: fixed !important;
   top: 60px !important;
-  left: 240px !important;
+  left: 300px !important;
   -o-text-overflow: ellipsis !important;
   text-overflow: ellipsis !important;
   max-width: calc(100vw - 550px) !important;
@@ -2419,7 +2419,7 @@ body:not(.admin)
     content: "";
     position: fixed;
     top: 60px;
-    left: 240px;
+    left: 300px;
   }
 }
 
@@ -2442,7 +2442,7 @@ body
   > div.col-sm-6.col-lg-6.col-xs-6
   > h2,
 body > div.container-fluid > div > div.col-sm-10 > h1 {
-  width: calc(100vw - 240px);
+  width: calc(100vw - 300px);
   height: 60px;
   padding-left: 25px;
   color: hsla(0, 0%, 100%, 0.7);
@@ -2454,7 +2454,7 @@ body > div.container-fluid > div > div.col-sm-10 > h1 {
   font-weight: 400;
   position: fixed;
   top: 60px;
-  left: 240px;
+  left: 300px;
 }
 
 body
@@ -2660,8 +2660,8 @@ body.serieslist > div.container-fluid > div > div.col-sm-10:before {
   line-height: 1;
   font-size: 6vw;
   position: fixed;
-  left: 240px;
-  top: 240px;
+  left: 300px;
+  top: 300px;
   width: calc(20% - 55px);
   text-align: center;
 }
@@ -2826,8 +2826,8 @@ body.catlist > div.container-fluid > div.row-fluid > div.col-sm-10:before {
   line-height: 1;
   font-size: 6vw;
   position: fixed;
-  left: 240px;
-  top: 240px;
+  left: 300px;
+  top: 300px;
   width: calc(20% - 55px);
   text-align: center;
 }
@@ -2845,7 +2845,7 @@ body.langlist > div.container-fluid > div > div.col-sm-10:before {
   font-weight: 400;
   line-height: 1;
   font-size: 6vw;
-  left: 240px;
+  left: 300px;
   top: 180px;
   width: calc(20% - 55px);
   text-align: center;
@@ -2854,7 +2854,7 @@ body.langlist > div.container-fluid > div > div.col-sm-10:before {
 
 body.authorlist > div.container-fluid > div.row-fluid > div.col-sm-10:before {
   content: "\e008";
-  top: 240px;
+  top: 300px;
 }
 
 @media screen and (max-width: 992px) {
@@ -3693,7 +3693,7 @@ body
   font-size: 15px;
   line-height: 60px;
   top: 60px;
-  left: 240px;
+  left: 300px;
   position: fixed;
 }
 
@@ -3737,7 +3737,7 @@ body
   > form
   > #test:before {
   content: "Advanced Search";
-  width: calc(100vw - 240px);
+  width: calc(100vw - 300px);
   margin: 0;
   -webkit-margin-before: 0;
   -webkit-margin-after: 0;
@@ -3896,7 +3896,7 @@ body.advanced_search
   line-height: 1;
   font-size: 6vw;
   position: fixed;
-  left: 240px;
+  left: 300px;
   top: 180px;
   width: calc(20% - 55px);
   text-align: center;
@@ -3908,12 +3908,12 @@ a:focus {
 }
 
 #bookDetailsModal {
-  width: calc(100vw - 240px);
+  width: calc(100vw - 300px);
   height: calc(100% - 60px);
   padding: 0;
   position: fixed;
   top: 60px;
-  left: 240px;
+  left: 300px;
   background-image: url(images/caliblur/blur-noise.webp),
     url(images/caliblur/blur-light.webp);
   background-repeat: repeat, no-repeat;
@@ -3968,7 +3968,7 @@ a:focus {
 }
 
 #bookDetailsModal > .modal-dialog.modal-lg > .modal-content > .modal-body {
-  width: calc(100vw - 240px);
+  width: calc(100vw - 300px);
   height: calc(100% - 120px);
   position: fixed;
   min-height: 1px;
@@ -4373,7 +4373,7 @@ div.btn-group[role="group"][aria-label="Download, send to Kindle, reading"]
   top: 60px;
   right: 0;
   margin: 0;
-  width: calc(100vw - 240px);
+  width: calc(100vw - 300px);
   height: 60px;
   display: -webkit-box;
   display: -ms-flexbox;
@@ -4800,7 +4800,7 @@ body.shelf > div.container-fluid > div > div.col-sm-10 > div.discover > h2 {
   -webkit-margin-after: 0 !important;
   position: fixed !important;
   top: 60px !important;
-  left: 240px !important;
+  left: 300px !important;
   text-align: left !important;
   overflow: hidden;
   -o-text-overflow: ellipsis;
@@ -4814,8 +4814,8 @@ body.shelf-down > .discover > h2 {
 }
 
 body.shelf-down > .discover > .row > .book.col-sm-3.col-lg-2.col-xs-6 {
-  max-width: 225px !important;
-  width: 225px !important;
+  max-width: 285px !important;
+  width: 285px !important;
 }
 
 body.shelf-down .btn-group button#btnGroupDrop1 {
@@ -5395,7 +5395,7 @@ body.author:not(.authorlist) .undefined-img:before {
   line-height: 1;
   font-size: 6vw;
   position: fixed;
-  left: 240px;
+  left: 300px;
   top: 200px;
   width: 20%;
   text-align: center;
@@ -5404,7 +5404,7 @@ body.author:not(.authorlist) .undefined-img:before {
 
 .author > .container-fluid > .row-fluid > .col-sm-10 > h2:before {
   content: "About Author";
-  width: calc(100vw - 240px);
+  width: calc(100vw - 300px);
   height: 60px;
   margin: 0;
   padding-left: 25px;
@@ -5421,7 +5421,7 @@ body.author:not(.authorlist) .undefined-img:before {
   -webkit-margin-after: 0;
   position: fixed;
   top: 60px;
-  left: 240px;
+  left: 300px;
   text-align: left;
 }
 
@@ -5469,8 +5469,8 @@ body.author:not(.authorlist) .undefined-img:before {
 }
 
 body.author:not(.authorlist) > div.container-fluid > div > div.col-sm-10 {
-  width: calc(100% - 240px);
-  left: 240px;
+  width: calc(100% - 300px);
+  left: 300px;
   padding-left: 20%;
   padding-right: 30px;
   padding-bottom: 20px;
@@ -5526,7 +5526,7 @@ body.shelf.modal-open > .container-fluid {
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
   border-radius: 3px;
   z-index: 9999999999999999999999;
-  left: calc(50% - 225px);
+  left: calc(50% - 285px);
   right: auto;
   width: 450px;
 }
@@ -6050,7 +6050,7 @@ body.newuser.admin
   > div.col-sm-10
   > div.discover
   > h1:before {
-  width: calc(100vw - 240px);
+  width: calc(100vw - 300px);
   height: 60px;
   margin: 0;
   padding-left: 25px;
@@ -6090,7 +6090,7 @@ body.admin
   > h2:first-of-type:before {
   content: "Admin Settings";
   position: fixed;
-  left: 240px;
+  left: 300px;
 }
 
 body.edituser.admin
@@ -6101,7 +6101,7 @@ body.edituser.admin
   > h1:before {
   content: "User Settings";
   position: fixed;
-  left: 240px;
+  left: 300px;
 }
 
 body.newuser.admin
@@ -6112,7 +6112,7 @@ body.newuser.admin
   > h1:before {
   content: "New User";
   position: fixed;
-  left: 240px;
+  left: 300px;
 }
 
 body.admin > div.container-fluid > div > div.col-sm-10 > div.container-fluid {
@@ -6219,7 +6219,7 @@ body.newuser.admin
   font-weight: 400;
   font-size: 6vw;
   position: fixed;
-  left: 240px;
+  left: 300px;
   top: 180px;
   width: calc(20% - 55px);
   text-align: center;
@@ -6232,7 +6232,7 @@ body.newuser.admin
 
 body.edituser.admin > div.container-fluid > div > div.col-sm-10 > div.discover,
 body.newuser.admin > div.container-fluid > div > div.col-sm-10 > div.discover {
-  left: 240px;
+  left: 300px;
   margin: 120px 0 0 20% !important;
   padding: 30px 15px 15px !important;
   width: calc(80% - 30px);
@@ -6670,7 +6670,7 @@ body.admin.uiconfig
   > div.discover
   > h2:first-of-type,
 body.mailset > div.container-fluid > div > div.col-sm-10 > div.discover > h1 {
-  width: calc(100vw - 240px);
+  width: calc(100vw - 300px);
   background: rgba(0, 0, 0, 0.15);
   color: hsla(0, 0%, 100%, 0.7);
   font-family: "Open Sans Semibold", "Helvetica Neue", Helvetica, Arial,
@@ -6686,7 +6686,7 @@ body.mailset > div.container-fluid > div > div.col-sm-10 > div.discover > h1 {
   -webkit-margin-after: 0;
   height: 60px;
   top: 60px;
-  left: 240px;
+  left: 300px;
   position: fixed;
   -webkit-tap-highlight-color: transparent;
   -webkit-font-smoothing: antialiased;
@@ -6793,7 +6793,7 @@ body:not(.blur):not(.login):not(.me):not(.author):not(.editbook):not(
   content: "";
   position: fixed;
   top: 60px;
-  left: 240px;
+  left: 300px;
   z-index: 99999999999999999999999999999999999;
 }
 
@@ -6824,13 +6824,13 @@ body:not(.blur):not(.me):not(.author):not(.editbook):not(.upload):not(
   -webkit-background-size: auto, cover !important;
   -moz-background-size: auto, cover !important;
   -o-background-size: auto, cover !important;
-  width: calc(100vw - 240px);
+  width: calc(100vw - 300px);
   height: calc(100% - 120px);
   display: block;
   content: "";
   position: fixed;
   top: 120px;
-  left: 240px;
+  left: 300px;
   right: 0;
   bottom: 0;
   z-index: 99999999999999999999999999999999999;
@@ -6870,7 +6870,7 @@ body:not(.blur):not(.me):not(.author):not(.editbook):not(.upload):not(
   -webkit-animation: loading 0.5s linear infinite;
   animation: loading 0.5s linear infinite;
   display: block;
-  top: 240px;
+  top: 300px;
   left: calc(50% + 120px);
   position: fixed;
   z-index: 999999999999999999999999999999999999;
@@ -7790,7 +7790,7 @@ body.upload
 }
 
 #main-nav + #scnd-nav {
-  width: 240px;
+  width: 300px;
   height: calc(100% - 120px);
   left: 0;
   top: 120px;
@@ -7942,7 +7942,7 @@ body.upload
   content: "";
   position: fixed;
   top: 60px;
-  left: 240px;
+  left: 300px;
   pointer-events: none;
 }
 
@@ -8023,7 +8023,7 @@ body.admin.modal-open .navbar {
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
   border-radius: 3px;
   z-index: 9999999999999999999999;
-  left: calc(50% - 225px);
+  left: calc(50% - 285px);
   right: auto;
   width: 450px;
 }
@@ -8863,7 +8863,7 @@ label[for="theme"] {
 
   .navbar-collapse.collapse {
     height: calc(100%) !important;
-    width: 240px;
+    width: 300px;
     background: #3f4245;
     border: 0;
     -webkit-box-shadow: none;
@@ -8973,7 +8973,7 @@ label[for="theme"] {
 
   #form-upload .form-group .btn {
     float: left;
-    width: 240px;
+    width: 300px;
   }
 
   #btn-upload {
@@ -9223,7 +9223,7 @@ label[for="theme"] {
 
   .navbar-collapse.collapse .hidden-xs {
     display: list-item !important;
-    width: 225px;
+    width: 285px;
   }
 
   .navbar-collapse.collapse:after {
@@ -9740,7 +9740,7 @@ label[for="theme"] {
     line-height: 1;
     font-size: 6vw;
     position: fixed;
-    left: 240px;
+    left: 300px;
     top: 180px;
     width: calc(20% - 55px);
     text-align: center;
@@ -10711,7 +10711,7 @@ label[for="theme"] {
 
   #main-nav + #scnd-nav .nav-head.hidden-xs {
     display: list-item !important;
-    width: 225px;
+    width: 285px;
   }
 
   .shelforder #sortTrue > div:before {
@@ -10844,12 +10844,12 @@ label[for="theme"] {
 
   .navbar-collapse {
     border: 0;
-    width: 240px;
+    width: 300px;
     height: 100% !important;
     overflow: hidden;
     visibility: visible;
-    -webkit-transform: translate3d(-240px, 0, 0);
-    transform: translate3d(-240px, 0, 0);
+    -webkit-transform: translate3d(-300px, 0, 0);
+    transform: translate3d(-300px, 0, 0);
     -webkit-transition: -webkit-transform 0.5s;
     -o-transition: transform 0.5s;
     transition: transform 0.5s, -webkit-transform 0.5s;
@@ -11029,8 +11029,8 @@ body.publisherlist > div.container-fluid > div > div.col-sm-10:before {
   line-height: 1;
   font-size: 6vw;
   position: fixed;
-  left: 240px;
-  top: 240px;
+  left: 300px;
+  top: 300px;
   width: calc(20% - 55px);
   text-align: center;
 }
@@ -11049,8 +11049,8 @@ body.ratingslist > div.container-fluid > div > div.col-sm-10:before {
   line-height: 1;
   font-size: 6vw;
   position: fixed;
-  left: 240px;
-  top: 240px;
+  left: 300px;
+  top: 300px;
   width: calc(20% - 55px);
   text-align: center;
 }
@@ -11075,8 +11075,8 @@ body.formatslist > div.container-fluid > div > div.col-sm-10:before {
   line-height: 1;
   font-size: 6vw;
   position: fixed;
-  left: 240px;
-  top: 240px;
+  left: 300px;
+  top: 300px;
   width: calc(20% - 55px);
   text-align: center;
 }
@@ -11390,7 +11390,7 @@ body.mailset
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
   border-radius: 3px;
   z-index: 9999999999999999999999;
-  left: calc(50% - 225px);
+  left: calc(50% - 285px);
   right: auto;
   width: 450px;
 }

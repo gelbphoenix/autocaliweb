@@ -20,9 +20,9 @@ from flask import render_template, g, abort, request, flash
 from flask_babel import gettext as _
 from werkzeug.local import LocalProxy
 from .cw_login import current_user
-from sqlalchemy.sql.expression import or_
+from sqlalchemy.sql.expression import or_, and_
 
-from . import config, constants, logger, ub
+from . import config, constants, logger, ub, calibre_db, db
 from .ub import User
 
 # CWA specific imports
@@ -119,6 +119,60 @@ def get_sidebar_config(kwargs=None):
     g.shelves_access = ub.session.query(ub.Shelf).filter(
         or_(ub.Shelf.is_public == 1, ub.Shelf.user_id == current_user.id)).order_by(ub.Shelf.name).all()
 
+    # Sidebar: optional per-shelf count indicator (0=off, 1=books, 2=unread).
+    g.shelf_count_indicator_mode = config.config_shelf_count_indicator
+    g.shelf_book_counts = {}
+    shelf_ids = [s.id for s in g.shelves_access if s.id]
+    if shelf_ids and g.shelf_count_indicator_mode:
+        if g.shelf_count_indicator_mode == 1:
+            g.shelf_book_counts = dict(
+                ub.session.query(ub.BookShelf.shelf, ub.func.count(ub.BookShelf.id))
+                .filter(ub.BookShelf.shelf.in_(shelf_ids))
+                .group_by(ub.BookShelf.shelf)
+                .all()
+            )
+        elif g.shelf_count_indicator_mode == 2 and not current_user.is_anonymous:
+            if not config.config_read_column:
+                g.shelf_book_counts = dict(
+                    ub.session.query(ub.BookShelf.shelf, ub.func.count(ub.BookShelf.id))
+                    .outerjoin(
+                        ub.ReadBook,
+                        and_(ub.ReadBook.user_id == int(current_user.id),
+                             ub.ReadBook.book_id == ub.BookShelf.book_id)
+                    )
+                    .filter(ub.BookShelf.shelf.in_(shelf_ids))
+                    .filter(ub.func.coalesce(ub.ReadBook.read_status, 0) != ub.ReadBook.STATUS_FINISHED)
+                    .group_by(ub.BookShelf.shelf)
+                    .all()
+                )
+            else:
+                try:
+                    read_column = db.cc_classes[config.config_read_column]
+                except (KeyError, AttributeError, IndexError):
+                    log.error("Custom Column No.%s does not exist in calibre database", config.config_read_column)
+                    read_column = None
+
+                if read_column is not None:
+                    shelf_links = ub.session.query(ub.BookShelf.shelf, ub.BookShelf.book_id) \
+                        .filter(ub.BookShelf.shelf.in_(shelf_ids)) \
+                        .all()
+                    shelf_to_books = {}
+                    all_book_ids = set()
+                    for shelf_id, book_id in shelf_links:
+                        shelf_to_books.setdefault(shelf_id, set()).add(book_id)
+                        all_book_ids.add(book_id)
+
+                    if all_book_ids:
+                        read_true_ids = {
+                            row[0] for row in calibre_db.session.query(read_column.book)
+                            .filter(read_column.book.in_(all_book_ids), read_column.value == True)
+                            .all()
+                        }
+                        unread_ids = all_book_ids - read_true_ids
+                        g.shelf_book_counts = {
+                            shelf_id: sum(1 for book_id in books if book_id in unread_ids)
+                            for shelf_id, books in shelf_to_books.items()
+                        }
     return sidebar, simple
 
 # Checks if an update for CWA is available, returning True if yes

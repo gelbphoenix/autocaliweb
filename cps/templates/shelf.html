@@ -1,11 +1,11 @@
 {% import 'image.html' as image %}
 {% extends "layout.html" %}
 {% block body %}
-<div class="discover">
+<div class="discover" data-current-shelf-id="{{ shelf.id }}">
   <h2>{{title}}</h2>
       <!--form  method="post"--->
   {% if current_user.role_download() %}
-  <a id="shelf_down" href="{{ url_for('shelf.show_simpleshelf', shelf_id=shelf.id) }}" class="btn btn-primary">{{ _('Download') }} </a>
+    <a id="shelf_down" href="{{ url_for('shelf.show_simpleshelf', shelf_id=shelf.id) }}" class="btn btn-primary{% if not entries.__len__() %} hidden{% endif %}">{{ _('Download') }} </a>
       {% endif %}
   {% if current_user.is_authenticated %}
     {% if (current_user.role_edit_shelfs() and shelf.is_public ) or not shelf.is_public  %}
@@ -34,7 +34,7 @@
   {% endif %}
   <div class="row display-flex">
     {% for entry in entries %}
-    <div class="col-sm-3 col-lg-2 col-xs-6 book session">
+    <div class="col-sm-3 col-lg-2 col-xs-6 book session" data-book-id="{{ entry.Books.id }}">
       <div class="cover">
             <a href="{{ url_for('web.show_book', book_id=entry.Books.id) }}" {% if simple==false %}data-toggle="modal" data-target="#bookDetailsModal" data-remote="false"{% endif %}>
               <span class="img" title="{{entry.Books.title}}" >
@@ -88,6 +88,10 @@
       </div>
     </div>
     {% endfor %}
+  </div>
+
+  <div id="shelf-empty-placeholder" class="alert alert-info text-center{% if entries.__len__() %} hidden{% endif %}" role="status">
+    {{ _('This shelf is empty.') }}
   </div>
 </div>
 {% endblock %}

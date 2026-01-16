@@ -23,6 +23,30 @@ function getPath() {
     ); // the js folder path
 }
 
+function refreshShelfCountPills() {
+    if (!window.SHELF_SIDEBAR_COUNTS_URL) return;
+    var $pills = $(".shelf-count-pill[data-shelf-id]");
+    if (!$pills.length) return;
+
+    $.ajax({
+        method: "get",
+        url: window.SHELF_SIDEBAR_COUNTS_URL,
+        dataType: "json",
+    }).done(function (res) {
+        if (!res || !res.counts) return;
+        $pills.each(function () {
+            var shelfId = String($(this).data("shelf-id"));
+            var value = res.counts[shelfId];
+            if (value === undefined || value === null) {
+                value = 0;
+            }
+            $(this).text(value);
+        });
+    });
+}
+
+window.refreshShelfCountPills = refreshShelfCountPills;
+
 function postButton(event, action, location = "") {
     event.preventDefault();
     var newForm = jQuery("<form>", {

@@ -33,19 +33,51 @@
       position: static !important;
       margin-top: 0.8rem !important;
   }
+
+  body.book_table .bootstrap-table .fixed-table-toolbar .search {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+  }
+
+  body.book_table .bootstrap-table .fixed-table-toolbar .search .search-input {
+      width: 240px;
+  }
+
+  body.book_table .bootstrap-table .fixed-table-toolbar .search #selection-status {
+      white-space: nowrap;
+  }
 </style>
 {% endblock %}
 {% block body %}
 <div class="discover">
   <h2 class="{{page}}">{{_(title)}}</h2>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <script>
+      window.BOOKS_TABLE_ALL_IDS_URL = "{{ url_for('web.list_book_ids') }}";
+    </script>
     <div class="row form-group" style="display: inline-block;">
       <div class="btn btn-default disabled" id="merge_books" aria-disabled="true">
         {{_('Merge selected books')}}
       </div>
-      <div class="btn btn-default disabled" id="delete_selection" aria-disabled="true">
-        {{_('Clear selections')}}
+
+      {% if current_user.role_edit() %}
+      <div id="books-table-selection-actions" class="btn-group" role="group" aria-label="Selection actions">
+        <button id="selection_actions" type="button" class="btn btn-default dropdown-toggle"
+                data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+          {{_('Selection')}}
+          <span class="caret"></span>
+        </button>
+        <ul id="selection-actions" class="dropdown-menu" aria-labelledby="selection_actions">
+          <li><a href="#" data-selection-action="select-page">{{_('Select page')}}</a></li>
+          <li><a href="#" data-selection-action="clear-page">{{_('Clear page')}}</a></li>
+          <li role="separator" class="divider"></li>
+          <li><a href="#" data-selection-action="select-all-results">{{_('Select all results')}}</a></li>
+          <li><a href="#" data-selection-action="clear-all">{{_('Clear selections')}}</a></li>
+        </ul>
       </div>
+      <span id="selection-status" class="text-muted"></span>
+      {% endif %}
       <div class="btn btn-default disabled" id="edit_selected_books" aria-disabled="true">
         {{_('Edit selected books')}}
       </div>
@@ -64,8 +96,55 @@
       <div class="btn btn-default disabled" id="delete_selected_books" aria-disabled="true">
         {{_('Delete selected books')}}
       </div>
+
+      <div class="btn-group" role="group" aria-label="Bulk shelf actions">
+        <button id="bulk_add_to_shelf" type="button" class="btn btn-default dropdown-toggle disabled"
+                data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" aria-disabled="true">
+          {{_('Add selected to shelf')}}
+          <span class="caret"></span>
+        </button>
+        <ul id="bulk-add-to-shelves" class="dropdown-menu" aria-labelledby="bulk_add_to_shelf">
+          {% for shelf in g.shelves_access %}
+            {% if not shelf.is_public or current_user.role_edit_shelfs() %}
+              <li>
+                <a href="#" data-bulk-shelf-action="add" data-href="{{ url_for('shelf.bulk_add_to_shelf', shelf_id=shelf.id) }}">
+                  {{ shelf.name }}{% if shelf.is_public == 1 %} {{ _('(Public)') }}{% endif %}
+                </a>
+              </li>
+            {% endif %}
+          {% endfor %}
+        </ul>
+      </div>
+
+      <div class="btn-group" role="group" aria-label="Bulk shelf actions">
+        <button id="bulk_remove_from_shelf" type="button" class="btn btn-default dropdown-toggle disabled"
+                data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" aria-disabled="true">
+          {{_('Remove selected from shelf')}}
+          <span class="caret"></span>
+        </button>
+        <ul id="bulk-remove-from-shelves" class="dropdown-menu" aria-labelledby="bulk_remove_from_shelf">
+          {% for shelf in g.shelves_access %}
+            {% if not shelf.is_public or current_user.role_edit_shelfs() %}
+              <li>
+                <a href="#" data-bulk-shelf-action="remove" data-href="{{ url_for('shelf.bulk_remove_from_shelf', shelf_id=shelf.id) }}">
+                  {{ shelf.name }}{% if shelf.is_public == 1 %} {{ _('(Public)') }}{% endif %}
+                </a>
+              </li>
+            {% endif %}
+          {% endfor %}
+        </ul>
+      </div>
+
         <div class="btn btn-default disabled" id="table_xchange" ><span class="glyphicon glyphicon-arrow-up"></span><span class="glyphicon glyphicon-arrow-down"></span>{{_(' Exchange author & title')}}
       </div>
+    </div>
+
+    <div id="bulk-shelf-action-status" class="alert alert-info" role="alert" style="display: none; margin-top: 10px;">
+      <button type="button" class="close" aria-label="Close" id="bulk-shelf-action-status-close">
+        <span aria-hidden="true">&times;</span>
+      </button>
+      <span class="bulk-shelf-status-text"></span>
+      <a class="bulk-shelf-status-link" href="#" style="display:none; margin-left: 8px;"></a>
     </div>
     <div>
       <br>

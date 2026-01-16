@@ -265,7 +265,7 @@
                       <span class="glyphicon glyphicon-list shelf"></span>
                       <span class="shelf-link-title">{{shelf.name|shortentitle(40)}}{% if shelf.is_public == 1 %} {{_('(Public)')}}{% endif %}</span>
                       {% if g.shelf_count_indicator_mode is defined and g.shelf_count_indicator_mode != 0 %}
-                        <span class="shelf-count-pill">{{ g.shelf_book_counts.get(shelf.id, 0) if g.shelf_book_counts is defined else 0 }}</span>
+                        <span class="shelf-count-pill" data-shelf-id="{{ shelf.id }}">{{ g.shelf_book_counts.get(shelf.id, 0) if g.shelf_book_counts is defined else 0 }}</span>
                       {% endif %}
                     </a>
                   </li>
@@ -333,6 +333,7 @@
     <script src="{{ url_for('static', filename='js/libs/plugins.js') }}"></script>
     <script src="{{ url_for('static', filename='js/libs/jquery.form.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/uploadprogress.js') }}"> </script>
+    <script>window.SHELF_SIDEBAR_COUNTS_URL = "{{ url_for('shelf.sidebar_counts') }}";</script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     {% if g.current_theme == 1 %}
       <script src="{{ url_for('static', filename='js/libs/jquery.visible.min.js') }}"></script>

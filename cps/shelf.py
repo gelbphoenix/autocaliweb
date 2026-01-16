@@ -40,6 +40,9 @@ log = logger.create()
 shelf = Blueprint('shelf', __name__)
 
 
+MAX_BULK_SHELF_SELECTION = 1000
+
+
 def _parse_selection_ids_from_request():
     payload = request.get_json(silent=True) or {}
     selections = payload.get('selections') or payload.get('book_ids') or []
@@ -156,6 +159,12 @@ def bulk_add_to_shelf(shelf_id):
     if not selections:
         return jsonify({"success": False, "msg": _("No books selected")}), 400
 
+    if len(selections) > MAX_BULK_SHELF_SELECTION:
+        return jsonify({
+            "success": False,
+            "msg": _("Too many books selected (max %(max)d)", max=MAX_BULK_SHELF_SELECTION),
+        }), 400
+
     # Validate book ids exist in calibre db.
     existing_book_ids = {
         row[0]
@@ -220,6 +229,12 @@ def bulk_remove_from_shelf(shelf_id):
         return jsonify({"success": False, "msg": _("Sorry you are not allowed to remove a book from this shelf")}), 403
     if not selections:
         return jsonify({"success": False, "msg": _("No books selected")}), 400
+
+    if len(selections) > MAX_BULK_SHELF_SELECTION:
+        return jsonify({
+            "success": False,
+            "msg": _("Too many books selected (max %(max)d)", max=MAX_BULK_SHELF_SELECTION),
+        }), 400
 
     existing_links = ub.session.query(ub.BookShelf.book_id)
     existing_links = existing_links.filter(ub.BookShelf.shelf == shelf_id)

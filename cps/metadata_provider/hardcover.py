@@ -80,7 +80,6 @@ except Exception as e:
         series: str = ""
         cover: str = ""
         description: Optional[str] = ""
-        series: Optional[str] = ""
         series_index: Optional[Union[int, float]] = 0
         identifiers: Dict[str, Union[str, int]] = field(default_factory=dict)
         publisher: Optional[str] = ""
@@ -172,11 +171,14 @@ class Hardcover(Metadata):
         "Content-Type": "application/json",
         "User-Agent": constants.USER_AGENT,
     }
-    FORMATS = ["","Physical Book","","","E-Book"] # Map reading_format_id to text equivelant.
+    FORMATS = {
+    1: "Physical Book",
+    4: "E-Book",
+} # Map reading_format_id to text equivelant.
 
     def search(
         self, query: str, generic_cover: str = "", locale: str = "en"
-    ) -> Optional[List[MetaRecord]]:
+    ) -> List[MetaRecord]:
         val = list()
         if self.active:
             try:
@@ -228,18 +230,7 @@ class Hardcover(Metadata):
                         result = books_data[0]
                         val = self._parse_edition_results(result=result, generic_cover=generic_cover, locale=locale)
                 else:
-                    raw_results = self._safe_get(response_data, "data", "search", "results", "hits", default=[])
-                    
-                    try:
-                        if isinstance(raw_results, str):
-                            import json as _json
-                            parsed = _json.loads(raw_results)
-                        else:
-                            parsed = raw_results
-                    except Exception as _:
-                        parsed = []
-
-                    search_hits = self._safe_get(parsed, "hits", default=[])
+                    search_hits = self._safe_get(response_data, "data", "search", "results", "hits", default=[])
 
                     for result in search_hits:
                         match = self._parse_title_result(
@@ -331,8 +322,8 @@ class Hardcover(Metadata):
                 match.identifiers["isbn"] = isbn
             
             rf_id = edition.get("reading_format_id")
-            if isinstance(rf_id, int) and 0 <= rf_id < len(Hardcover.FORMATS):
-                match.format = Hardcover.FORMATS[rf_id]
+            if isinstance(rf_id, int):
+                match.format = Hardcover.FORMATS.get(rf_id, "")
             else:
                 match.format = ""
             

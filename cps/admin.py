@@ -258,8 +258,8 @@ def admin():
 
     return render_title_template("admin.html", allUser=all_user, config=config, commit=commit,
                                  acw_version=acw_version, kepubify_version=kepubify_version,
-                                 calibre_version=calibre_version, python_version=python_version, 
-								 feature_support=feature_support, schedule_time=schedule_time, 
+                                 calibre_version=calibre_version, python_version=python_version,
+								 feature_support=feature_support, schedule_time=schedule_time,
 								 schedule_duration=schedule_duration,
                                  title=_("Admin page"), page="admin")
 
@@ -629,6 +629,7 @@ def update_view_configuration():
     _config_int(to_save, "config_restricted_column")
 
     _config_int(to_save, "config_theme")
+    _config_int(to_save, "config_shelf_count_indicator")
     _config_int(to_save, "config_random_books")
     _config_int(to_save, "config_books_per_page")
     _config_int(to_save, "config_authors_max")

@@ -5,3 +5,37 @@ dd.meta_description {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* Sidebar shelf count pill */
+a.shelf-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+span.shelf-link-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+span.shelf-count-pill {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 2px 6px;
+  border: 1px solid #45b29d;
+  background-color: #45b29d;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  opacity: 0.9;
+}
+
+.blur span.shelf-count-pill {
+  border-color: #cc7b19;
+  background-color: #cc7b19;
+}

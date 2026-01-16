@@ -50,7 +50,9 @@ oauth_check = {}
 oauthblueprints = []
 oauth = Blueprint('oauth', __name__)
 log = logger.create()
+
 generic = None
+env_prefix = "OAUTH_"
 
 # FOR DEVELOPMENT: Enable insecure transport for OAuth
 #os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
@@ -239,6 +241,30 @@ def generate_oauth_blueprints():
 
     oauth_ids = ub.session.query(ub.OAuthProvider).all()
     for oauth_provider in oauth_ids:
+        # Set .active if provider is in {env_prefix}PROVIDER
+        if oauth_provider.provider_name in os.getenv(f"{env_prefix}PROVIDER", ""):
+            oauth_provider.active = True
+
+        if os.getenv(f"{env_prefix}{oauth_provider.provider_name.upper()}_CLIENT_ID"):
+            oauth_provider.oauth_client_id = os.getenv(f"{env_prefix}{oauth_provider.provider_name.upper()}_CLIENT_ID")
+            log.info(f"OAuth {oauth_provider.provider_name} client id added via environment variable.")
+
+        if os.getenv(f"{env_prefix}{oauth_provider.provider_name.upper()}_CLIENT_SECRET"):
+            oauth_provider.oauth_client_secret = os.getenv(f"{env_prefix}{oauth_provider.provider_name.upper()}_CLIENT_SECRET")
+            log.info(f"OAuth {oauth_provider.provider_name} client secret added via environment variable.")
+
+        if oauth_provider.provider_name == "generic":
+            if os.getenv(f"{env_prefix}GENERIC_METADATA_URL"):
+                oauth_provider.metadata_url = os.getenv(f"{env_prefix}GENERIC_METADATA_URL")
+            if os.getenv(f"{env_prefix}GENERIC_SCOPE"):
+                oauth_provider.scope = os.getenv(f"{env_prefix}GENERIC_SCOPE")
+            if os.getenv(f"{env_prefix}GENERIC_USERNAME_MAPPER"):
+                oauth_provider.username_mapper = os.getenv(f"{env_prefix}GENERIC_USERNAME_MAPPER")
+            if os.getenv(f"{env_prefix}GENERIC_EMAIL_MAPPER"):
+                oauth_provider.email_mapper = os.getenv(f"{env_prefix}GENERIC_EMAIL_MAPPER")
+            if os.getenv(f"{env_prefix}GENERIC_LOGIN_BUTTON"):
+                oauth_provider.login_button = os.getenv(f"{env_prefix}GENERIC_LOGIN_BUTTON")
+
         if oauth_provider.metadata_url:
             metadata = fetch_metadata(oauth_provider.id)
             if metadata:

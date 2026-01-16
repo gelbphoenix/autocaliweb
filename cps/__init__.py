@@ -34,15 +34,12 @@ from itsdangerous import URLSafeTimedSerializer, Signer
 import hashlib
 import itsdangerous 
 
-from . import logger
+from . import logger, config_sql, cache_buster, ub, db, constants
 from .cli import CliParameter
 from .reverseproxy import ReverseProxied
 from .server import WebServer
 from .dep_check import dependency_check
 from .updater import Updater
-from . import config_sql
-from . import cache_buster
-from . import ub, db
 
 try:
     from flask_limiter import Limiter
@@ -159,6 +156,19 @@ def create_app():
     config_sql.load_configuration(ub.session, encrypt_key)
     app.secret_key = os.getenv('SECRET_KEY', config_sql.get_flask_session_key(ub.session))
     config.init_config(ub.session, encrypt_key, cli_param)
+
+    auth_method = os.getenv("AUTH_METHOD", "").lower()
+    if auth_method:
+        auth_mapping = {
+            "basic": constants.LOGIN_BASIC,
+            "ldap": constants.LOGIN_LDAP,
+            "oauth": constants.LOGIN_OAUTH,
+        }
+        if auth_method in auth_mapping:
+            config.config_login_type = auth_mapping[auth_method]
+            log.info("AUTH_METHOD environment variable set to %s, overriding config setting", auth_method)
+        else:
+            log.warning(f"AUTH_METHOD environment variable set to {auth_method}, which is not a valid option. Valid options are: basic, ldap, oauth")
 
     if error:
         log.error(error)

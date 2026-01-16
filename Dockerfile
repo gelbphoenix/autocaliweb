@@ -8,9 +8,6 @@ ARG BUILD_ID
 ARG VERSION
 ARG DEBIAN_FRONTEND=noninteractive
 
-LABEL build_version="Version: ${VERSION}" \
-      build_date="${BUILD_DATE}" \
-      maintainer="gelbphoenix"
 
 LABEL org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.version="${VERSION}" \

@@ -449,26 +449,45 @@ $(function() {
                             btI18n('selectResultsConfirm', 'Select %(count)s results?'),
                             {count: total}
                         );
-                    if (!window.confirm(confirmText)) {
+
+                    var applySelection = function () {
+                        selections = window._.union(selections, ids);
+                        syncSelectionSet();
                         updateSelectionStatus();
-                        return;
-                    }
+                        setBulkShelfButtonsEnabled(selections.length >= 1);
 
-                    selections = window._.union(selections, ids);
-                    syncSelectionSet();
-                    updateSelectionStatus();
-                    setBulkShelfButtonsEnabled(selections.length >= 1);
+                        if (res.truncated) {
+                            $('#selection-status').text(
+                                btFormatNamed(
+                                    btI18n('selectedTruncated', '%(shown)s selected (truncated from %(total)s)'),
+                                    {shown: ids.length, total: total}
+                                )
+                            );
+                        }
 
-                    if (res.truncated) {
-                        $('#selection-status').text(
-                            btFormatNamed(
-                                btI18n('selectedTruncated', '%(shown)s selected (truncated from %(total)s)'),
-                                {shown: ids.length, total: total}
-                            )
+                        $table.bootstrapTable('refresh');
+                    };
+
+                    var cancelSelection = function () {
+                        updateSelectionStatus();
+                    };
+
+                    if (typeof window.confirmDialog === 'function' && $('#GeneralChangeModal').length) {
+                        window.confirmDialog(
+                            'select_all_results',
+                            'GeneralChangeModal',
+                            null,
+                            applySelection,
+                            cancelSelection,
+                            {header: '', main: confirmText}
                         );
+                    } else {
+                        if (!window.confirm(confirmText)) {
+                            updateSelectionStatus();
+                            return;
+                        }
+                        applySelection();
                     }
-
-                    $table.bootstrapTable('refresh');
                 })
                 .fail(function () {
                     $('#selection-status').text(btI18n('error', 'Error'));

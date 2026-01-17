@@ -36,3 +36,9 @@ gdrive_credentials
 client_secrets.json
 gmail.json
 /.key
+
+### Node / ESLint ###
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

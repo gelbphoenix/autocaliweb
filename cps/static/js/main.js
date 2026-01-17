@@ -23,6 +23,30 @@ function getPath() {
     ); // the js folder path
 }
 
+function refreshShelfCountPills() {
+    if (!window.SHELF_SIDEBAR_COUNTS_URL) return;
+    var $pills = $(".shelf-count-pill[data-shelf-id]");
+    if (!$pills.length) return;
+
+    $.ajax({
+        method: "get",
+        url: window.SHELF_SIDEBAR_COUNTS_URL,
+        dataType: "json",
+    }).done(function (res) {
+        if (!res || !res.counts) return;
+        $pills.each(function () {
+            var shelfId = String($(this).data("shelf-id"));
+            var value = res.counts[shelfId];
+            if (value === undefined || value === null) {
+                value = 0;
+            }
+            $(this).text(value);
+        });
+    });
+}
+
+window.refreshShelfCountPills = refreshShelfCountPills;
+
 function postButton(event, action, location = "") {
     event.preventDefault();
     var newForm = jQuery("<form>", {
@@ -240,7 +264,7 @@ $("#back").click(function () {
     window.location.href = loc + param;
 });
 
-function confirmDialog(id, dialogid, dataValue, yesFn, noFn) {
+function confirmDialog(id, dialogid, dataValue, yesFn, noFn, textOverrides) {
     var $confirm = $("#" + dialogid);
     $("#btnConfirmYes-" + dialogid)
         .off("click")
@@ -256,15 +280,25 @@ function confirmDialog(id, dialogid, dataValue, yesFn, noFn) {
             }
             $confirm.modal("hide");
         });
-    $.ajax({
-        method: "post",
-        dataType: "json",
-        url: getPath() + "/ajax/loaddialogtexts/" + id,
-        success: function success(data) {
-            $("#header-" + dialogid).html(data.header);
-            $("#text-" + dialogid).html(data.main);
-        },
-    });
+
+    if (textOverrides && (textOverrides.header !== undefined || textOverrides.main !== undefined)) {
+        if (textOverrides.header !== undefined) {
+            $("#header-" + dialogid).html(textOverrides.header);
+        }
+        if (textOverrides.main !== undefined) {
+            $("#text-" + dialogid).html(textOverrides.main);
+        }
+    } else {
+        $.ajax({
+            method: "post",
+            dataType: "json",
+            url: getPath() + "/ajax/loaddialogtexts/" + id,
+            success: function success(data) {
+                $("#header-" + dialogid).html(data.header);
+                $("#text-" + dialogid).html(data.main);
+            },
+        });
+    }
     $confirm.modal("show");
 }
 

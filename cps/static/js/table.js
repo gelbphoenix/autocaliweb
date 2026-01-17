@@ -41,12 +41,21 @@ function btI18n(key, fallback) {
 
 function btFormatNamed(template, values) {
     if (!template) return '';
-    return String(template).replace(/%\(([^)]+)\)s/g, function (match, key) {
+    var result = String(template).replace(/%\(([^)]+)\)s/g, function (match, key) {
         if (!values || values[key] === undefined || values[key] === null) {
             return match;
         }
         return String(values[key]);
     });
+
+    if (values) {
+        Object.keys(values).forEach(function (key) {
+            var token = '__' + String(key).toUpperCase() + '__';
+            result = result.split(token).join(String(values[key]));
+        });
+    }
+
+    return result;
 }
 
 function syncSelectionSet() {

@@ -60,18 +60,18 @@
           data-loading="{{ _('Loading…') }}"
           data-error="{{ _('Error') }}"
           data-no-books-selected="{{ _('No books selected') }}"
-          data-selection-count="{{ _('%(count)s selected') }}"
+          data-selection-count="{{ _('%(count)s selected', count='__COUNT__') }}"
           data-view-shelf="{{ _('View shelf') }}"
-          data-select-results-confirm="{{ _('Select %(count)s results?') }}"
-          data-select-results-confirm-truncated="{{ _('Select %(shown)s of %(total)s results?') }}"
-          data-selected-truncated="{{ _('%(shown)s selected (truncated from %(total)s)') }}"
-          data-bulk-no-changes-already="{{ _('No changes — all selected books are already on shelf “%(shelf)s”.') }}"
-          data-bulk-added="{{ _('Added %(count)s to shelf “%(shelf)s”.') }}"
-          data-bulk-already-on-shelf="{{ _('%(count)s already on shelf.') }}"
-          data-bulk-invalid="{{ _('%(count)s invalid.') }}"
-          data-bulk-no-changes-not-on="{{ _('No changes — none of the selected books were on shelf “%(shelf)s”.') }}"
-          data-bulk-removed="{{ _('Removed %(count)s from shelf “%(shelf)s”.') }}"
-          data-bulk-not-on-shelf="{{ _('%(count)s not on shelf.') }}"></span>
+          data-select-results-confirm="{{ _('Select %(count)s results?', count='__COUNT__') }}"
+          data-select-results-confirm-truncated="{{ _('Select %(shown)s of %(total)s results?', shown='__SHOWN__', total='__TOTAL__') }}"
+          data-selected-truncated="{{ _('%(shown)s selected (truncated from %(total)s)', shown='__SHOWN__', total='__TOTAL__') }}"
+          data-bulk-no-changes-already="{{ _('No changes — all selected books are already on shelf “%(shelf)s”.', shelf='__SHELF__') }}"
+          data-bulk-added="{{ _('Added %(count)s to shelf “%(shelf)s”.', count='__COUNT__', shelf='__SHELF__') }}"
+          data-bulk-already-on-shelf="{{ _('%(count)s already on shelf.', count='__COUNT__') }}"
+          data-bulk-invalid="{{ _('%(count)s invalid.', count='__COUNT__') }}"
+          data-bulk-no-changes-not-on="{{ _('No changes — none of the selected books were on shelf “%(shelf)s”.', shelf='__SHELF__') }}"
+          data-bulk-removed="{{ _('Removed %(count)s from shelf “%(shelf)s”.', count='__COUNT__', shelf='__SHELF__') }}"
+          data-bulk-not-on-shelf="{{ _('%(count)s not on shelf.', count='__COUNT__') }}"></span>
     <div class="row form-group" style="display: inline-block;">
       <div class="btn btn-default disabled" id="merge_books" aria-disabled="true">
         {{_('Merge selected books')}}

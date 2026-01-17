@@ -37,11 +37,6 @@ client_secrets.json
 gmail.json
 /.key
 
-### Node lock files ###
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
-
 ### Node / ESLint ###
 node_modules/
 npm-debug.log*

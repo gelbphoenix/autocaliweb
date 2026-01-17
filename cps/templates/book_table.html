@@ -56,13 +56,29 @@
     <script>
       window.BOOKS_TABLE_ALL_IDS_URL = "{{ url_for('web.list_book_ids') }}";
     </script>
+    <span id="books-table-i18n" hidden
+          data-loading="{{ _('Loading…') }}"
+          data-error="{{ _('Error') }}"
+          data-no-books-selected="{{ _('No books selected') }}"
+          data-selection-count="{{ _('%(count)s selected') }}"
+          data-view-shelf="{{ _('View shelf') }}"
+          data-select-results-confirm="{{ _('Select %(count)s results?') }}"
+          data-select-results-confirm-truncated="{{ _('Select %(shown)s of %(total)s results?') }}"
+          data-selected-truncated="{{ _('%(shown)s selected (truncated from %(total)s)') }}"
+          data-bulk-no-changes-already="{{ _('No changes — all selected books are already on shelf “%(shelf)s”.') }}"
+          data-bulk-added="{{ _('Added %(count)s to shelf “%(shelf)s”.') }}"
+          data-bulk-already-on-shelf="{{ _('%(count)s already on shelf.') }}"
+          data-bulk-invalid="{{ _('%(count)s invalid.') }}"
+          data-bulk-no-changes-not-on="{{ _('No changes — none of the selected books were on shelf “%(shelf)s”.') }}"
+          data-bulk-removed="{{ _('Removed %(count)s from shelf “%(shelf)s”.') }}"
+          data-bulk-not-on-shelf="{{ _('%(count)s not on shelf.') }}"></span>
     <div class="row form-group" style="display: inline-block;">
       <div class="btn btn-default disabled" id="merge_books" aria-disabled="true">
         {{_('Merge selected books')}}
       </div>
 
       {% if current_user.role_edit() %}
-      <div id="books-table-selection-actions" class="btn-group" role="group" aria-label="Selection actions">
+      <div id="books-table-selection-actions" class="btn-group" role="group" aria-label="{{ _('Selection actions') }}">
         <button id="selection_actions" type="button" class="btn btn-default dropdown-toggle"
                 data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
           {{_('Selection')}}
@@ -97,7 +113,7 @@
         {{_('Delete selected books')}}
       </div>
 
-      <div class="btn-group" role="group" aria-label="Bulk shelf actions">
+      <div class="btn-group" role="group" aria-label="{{ _('Bulk shelf actions') }}">
         <button id="bulk_add_to_shelf" type="button" class="btn btn-default dropdown-toggle disabled"
                 data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" aria-disabled="true">
           {{_('Add selected to shelf')}}
@@ -116,7 +132,7 @@
         </ul>
       </div>
 
-      <div class="btn-group" role="group" aria-label="Bulk shelf actions">
+      <div class="btn-group" role="group" aria-label="{{ _('Bulk shelf actions') }}">
         <button id="bulk_remove_from_shelf" type="button" class="btn btn-default dropdown-toggle disabled"
                 data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" aria-disabled="true">
           {{_('Remove selected from shelf')}}
@@ -140,7 +156,7 @@
     </div>
 
     <div id="bulk-shelf-action-status" class="alert alert-info" role="alert" style="display: none; margin-top: 10px;">
-      <button type="button" class="close" aria-label="Close" id="bulk-shelf-action-status-close">
+      <button type="button" class="close" aria-label="{{ _('Close') }}" id="bulk-shelf-action-status-close">
         <span aria-hidden="true">&times;</span>
       </button>
       <span class="bulk-shelf-status-text"></span>

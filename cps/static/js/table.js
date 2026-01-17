@@ -22,6 +22,33 @@ var selections = [];
 var reload = false;
 var selectionSet = new Set();
 
+var booksTableI18n = null;
+
+function getBooksTableI18n() {
+    var el = document.getElementById('books-table-i18n');
+    return el && el.dataset ? el.dataset : {};
+}
+
+function btI18n(key, fallback) {
+    if (booksTableI18n === null) {
+        booksTableI18n = getBooksTableI18n();
+    }
+    if (booksTableI18n && booksTableI18n[key]) {
+        return booksTableI18n[key];
+    }
+    return fallback;
+}
+
+function btFormatNamed(template, values) {
+    if (!template) return '';
+    return String(template).replace(/%\(([^)]+)\)s/g, function (match, key) {
+        if (!values || values[key] === undefined || values[key] === null) {
+            return match;
+        }
+        return String(values[key]);
+    });
+}
+
 function syncSelectionSet() {
     selectionSet = new Set(
         $.map(selections, function (id) {
@@ -34,7 +61,7 @@ function updateSelectionStatus() {
     var $el = $('#selection-status');
     if (!$el.length) return;
     if (selections.length) {
-        $el.text(selections.length + ' selected');
+        $el.text(btFormatNamed(btI18n('selectionCount', '%(count)s selected'), {count: selections.length}));
     } else {
         $el.text('');
     }
@@ -94,7 +121,7 @@ function showBulkShelfActionStatus(message, type, linkHref, linkText) {
 
     if ($link.length && linkHref) {
         $link.attr('href', linkHref);
-        $link.text(linkText || 'View shelf');
+        $link.text(linkText || btI18n('viewShelf', 'View shelf'));
         $link.show();
     } else if ($link.length) {
         $link.hide();
@@ -231,7 +258,7 @@ $(function() {
         function (e) {
             e.preventDefault();
             if (selections.length < 1) {
-                showBulkShelfActionStatus('No books selected', 'danger');
+                showBulkShelfActionStatus(btI18n('noBooksSelected', 'No books selected'), 'danger');
                 return;
             }
             var url = $(this).data('href');
@@ -251,7 +278,7 @@ $(function() {
             })
                 .done(function (res) {
                     if (res && res.success === false) {
-                        showBulkShelfActionStatus(res.msg || 'Error', 'danger');
+                        showBulkShelfActionStatus(res.msg || btI18n('error', 'Error'), 'danger');
                         return;
                     }
 
@@ -268,23 +295,47 @@ $(function() {
                     if (action === 'add') {
                         if (added === 0 && already > 0) {
                             level = 'info';
-                            msg = 'No changes — all selected books are already on shelf “' + shelfName + '”.';
+                            msg = btFormatNamed(
+                                btI18n('bulkNoChangesAlready', 'No changes — all selected books are already on shelf “%(shelf)s”.'),
+                                {shelf: shelfName}
+                            );
                         } else {
-                            msg = 'Added ' + added + ' to shelf “' + shelfName + '”.';
-                            if (already) msg += ' ' + already + ' already on shelf.';
+                            msg = btFormatNamed(
+                                btI18n('bulkAdded', 'Added %(count)s to shelf “%(shelf)s”.'),
+                                {count: added, shelf: shelfName}
+                            );
+                            if (already) {
+                                msg += ' ' + btFormatNamed(
+                                    btI18n('bulkAlreadyOnShelf', '%(count)s already on shelf.'),
+                                    {count: already}
+                                );
+                            }
                         }
-                        if (invalid) msg += ' ' + invalid + ' invalid.';
+                        if (invalid) {
+                            msg += ' ' + btFormatNamed(btI18n('bulkInvalid', '%(count)s invalid.'), {count: invalid});
+                        }
                     } else {
                         if (removed === 0 && notIn > 0) {
                             level = 'info';
-                            msg = 'No changes — none of the selected books were on shelf “' + shelfName + '”.';
+                            msg = btFormatNamed(
+                                btI18n('bulkNoChangesNotOn', 'No changes — none of the selected books were on shelf “%(shelf)s”.'),
+                                {shelf: shelfName}
+                            );
                         } else {
-                            msg = 'Removed ' + removed + ' from shelf “' + shelfName + '”.';
-                            if (notIn) msg += ' ' + notIn + ' not on shelf.';
+                            msg = btFormatNamed(
+                                btI18n('bulkRemoved', 'Removed %(count)s from shelf “%(shelf)s”.'),
+                                {count: removed, shelf: shelfName}
+                            );
+                            if (notIn) {
+                                msg += ' ' + btFormatNamed(
+                                    btI18n('bulkNotOnShelf', '%(count)s not on shelf.'),
+                                    {count: notIn}
+                                );
+                            }
                         }
                     }
 
-                    showBulkShelfActionStatus(msg, level, shelfUrl, shelfUrl ? 'View shelf' : null);
+                    showBulkShelfActionStatus(msg, level, shelfUrl, shelfUrl ? btI18n('viewShelf', 'View shelf') : null);
                     $("#books-table").bootstrapTable("refresh");
                     $("#books-table").bootstrapTable("uncheckAll");
                     if (window.refreshShelfCountPills) {
@@ -292,7 +343,7 @@ $(function() {
                     }
                 })
                 .fail(function (xhr) {
-                    var msg = 'Error';
+                    var msg = btI18n('error', 'Error');
                     if (xhr && xhr.responseJSON && xhr.responseJSON.msg) {
                         msg = xhr.responseJSON.msg;
                     } else if (xhr && xhr.responseText) {
@@ -365,7 +416,7 @@ $(function() {
             var opts = $table.bootstrapTable('getOptions') || {};
             var searchText = opts.searchText || '';
 
-            $('#selection-status').text('Loading…');
+            $('#selection-status').text(btI18n('loading', 'Loading…'));
             $.ajax({
                 method: 'get',
                 dataType: 'json',
@@ -374,13 +425,22 @@ $(function() {
             })
                 .done(function (res) {
                     if (!res || res.success === false) {
-                        $('#selection-status').text((res && res.msg) || 'Error');
+                        $('#selection-status').text((res && res.msg) || btI18n('error', 'Error'));
                         return;
                     }
 
                     var total = res.total || 0;
                     var ids = res.ids || [];
-                    if (!window.confirm('Select ' + (res.truncated ? ids.length + ' of ' + total : total) + ' results?')) {
+                    var confirmText = res.truncated
+                        ? btFormatNamed(
+                            btI18n('selectResultsConfirmTruncated', 'Select %(shown)s of %(total)s results?'),
+                            {shown: ids.length, total: total}
+                        )
+                        : btFormatNamed(
+                            btI18n('selectResultsConfirm', 'Select %(count)s results?'),
+                            {count: total}
+                        );
+                    if (!window.confirm(confirmText)) {
                         updateSelectionStatus();
                         return;
                     }
@@ -391,13 +451,18 @@ $(function() {
                     setBulkShelfButtonsEnabled(selections.length >= 1);
 
                     if (res.truncated) {
-                        $('#selection-status').text(ids.length + ' selected (truncated from ' + total + ')');
+                        $('#selection-status').text(
+                            btFormatNamed(
+                                btI18n('selectedTruncated', '%(shown)s selected (truncated from %(total)s)'),
+                                {shown: ids.length, total: total}
+                            )
+                        );
                     }
 
                     $table.bootstrapTable('refresh');
                 })
                 .fail(function () {
-                    $('#selection-status').text('Error');
+                    $('#selection-status').text(btI18n('error', 'Error'));
                 });
         }
     });

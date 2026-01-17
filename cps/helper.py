@@ -30,7 +30,7 @@ import requests
 import unidecode
 from uuid import uuid4
 
-from flask import send_from_directory, make_response, abort, url_for, Response, request
+from flask import send_from_directory, make_response, abort, url_for, Response, request, after_this_request, current_app
 from flask_babel import gettext as _
 from flask_babel import lazy_gettext as N_
 from flask_babel import get_locale
@@ -1064,8 +1064,37 @@ def do_download_file(book, book_format, client, data, headers):
     # ToDo Check headers parameter
     for element in headers:
         response.headers[element[0]] = element[1]
+
     log.info('Downloading file: \'%s\' by %s - %s', format(os.path.join(filename, book_name + "." + book_format)),
              current_user.name, request.headers.get('X-Forwarded-For', request.remote_addr))
+    
+    @after_this_request
+    def _cleanup_temp_export(res):
+        try:
+            use_x_sendfile = current_app.config.get("USE_X_SENDFILE", False)
+            if use_x_sendfile:
+                current_app.logger.debug("X-Sendfile is enabled, skipping cleanup of temp export")
+                return res
+            
+            real_filename_dir = os.path.realpath(filename)
+            tmpdir = get_temp_dir()
+
+            if not isinstance(real_filename_dir, str):
+                return res
+            
+            if real_filename_dir.startswith(tmpdir + os.sep) or "calibre_web" in real_filename_dir:
+                try:
+                    target = os.path.join(real_filename_dir, download_name + "." + book_format)
+                    if os.path.exists(target):
+                        os.remove(target)
+                        current_app.logger.debug("Removed temp export file: %s", target)
+                except Exception as e:
+                    current_app.logger.debug("Failed to remove temp export file: %s", e)
+        except Exception as e:
+            current_app.logger.exception("Failed to cleanup temp export: %s", e)
+        return res
+
+
     return response
 
 

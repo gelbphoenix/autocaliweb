@@ -1082,7 +1082,7 @@ def do_download_file(book, book_format, client, data, headers):
             if not isinstance(real_filename_dir, str):
                 return res
             
-            if real_filename_dir.startswith(tmpdir + os.sep) or "calibre_web" in real_filename_dir:
+            if real_filename_dir.startswith(os.path.realpath(tmpdir) + os.sep):
                 try:
                     target = os.path.join(real_filename_dir, download_name + "." + book_format)
                     if os.path.exists(target):

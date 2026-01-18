@@ -1,0 +1,20 @@
+{
+  "name": "autocaliweb",
+  "private": true,
+  "description": "Developer tooling (ESLint) for autocaliweb",
+  "type": "module",
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "scripts": {
+    "lint": "eslint cps/static/js",
+    "lint:fix": "eslint cps/static/js --fix",
+    "lint:ci": "eslint cps/static/js",
+    "lint:strict": "eslint cps/static/js --max-warnings=0"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.2",
+    "eslint": "9.39.2",
+    "globals": "15.15.0"
+  }
+}

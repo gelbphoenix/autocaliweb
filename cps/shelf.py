@@ -23,9 +23,10 @@
 import sys
 from datetime import datetime, timezone
 
-from flask import Blueprint, flash, redirect, request, url_for, abort
+from flask import Blueprint, flash, redirect, request, url_for, abort, jsonify
 from flask_babel import gettext as _
 from .cw_login import current_user
+from sqlalchemy import and_, or_
 from sqlalchemy.exc import InvalidRequestError, OperationalError
 from sqlalchemy.sql.expression import func, true
 
@@ -37,6 +38,237 @@ from .services import hardcover
 log = logger.create()
 
 shelf = Blueprint('shelf', __name__)
+
+
+MAX_BULK_SHELF_SELECTION = 1000
+
+
+def _parse_selection_ids_from_request():
+    payload = request.get_json(silent=True) or {}
+    selections = payload.get('selections') or payload.get('book_ids') or []
+    if selections is None:
+        selections = []
+    if not isinstance(selections, (list, tuple)):
+        return []
+    result = []
+    for value in selections:
+        try:
+            result.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    # De-dupe while keeping order
+    seen = set()
+    deduped = []
+    for book_id in result:
+        if book_id not in seen:
+            seen.add(book_id)
+            deduped.append(book_id)
+    return deduped
+
+
+@shelf.route("/shelf/sidebar_counts", methods=["GET"])
+@user_login_required
+def sidebar_counts():
+    mode = config.config_shelf_count_indicator
+    shelves = ub.session.query(ub.Shelf.id).filter(
+        or_(ub.Shelf.is_public == 1, ub.Shelf.user_id == current_user.id)
+    ).all()
+    shelf_ids = [row[0] for row in shelves if row and row[0]]
+
+    if not shelf_ids or not mode:
+        return jsonify({"success": True, "mode": mode, "counts": {}}), 200
+
+    if mode == 1:
+        counts = dict(
+            ub.session.query(ub.BookShelf.shelf, ub.func.count(ub.BookShelf.id))
+            .filter(ub.BookShelf.shelf.in_(shelf_ids))
+            .group_by(ub.BookShelf.shelf)
+            .all()
+        )
+        return jsonify({"success": True, "mode": mode, "counts": counts}), 200
+
+    if mode == 2:
+        if current_user.is_anonymous:
+            return jsonify({"success": True, "mode": mode, "counts": {}}), 200
+
+        if not config.config_read_column:
+            counts = dict(
+                ub.session.query(ub.BookShelf.shelf, ub.func.count(ub.BookShelf.id))
+                .outerjoin(
+                    ub.ReadBook,
+                    and_(
+                        ub.ReadBook.user_id == int(current_user.id),
+                        ub.ReadBook.book_id == ub.BookShelf.book_id,
+                    ),
+                )
+                .filter(ub.BookShelf.shelf.in_(shelf_ids))
+                .filter(ub.func.coalesce(ub.ReadBook.read_status, 0) != ub.ReadBook.STATUS_FINISHED)
+                .group_by(ub.BookShelf.shelf)
+                .all()
+            )
+            return jsonify({"success": True, "mode": mode, "counts": counts}), 200
+
+        try:
+            read_column = db.cc_classes[config.config_read_column]
+        except (KeyError, AttributeError, IndexError):
+            log.error("Custom Column No.%s does not exist in calibre database", config.config_read_column)
+            read_column = None
+
+        if read_column is None:
+            return jsonify({"success": True, "mode": mode, "counts": {}}), 200
+
+        shelf_links = (
+            ub.session.query(ub.BookShelf.shelf, ub.BookShelf.book_id)
+            .filter(ub.BookShelf.shelf.in_(shelf_ids))
+            .all()
+        )
+        shelf_to_books = {}
+        all_book_ids = set()
+        for shelf_id, book_id in shelf_links:
+            shelf_to_books.setdefault(shelf_id, set()).add(book_id)
+            all_book_ids.add(book_id)
+
+        if not all_book_ids:
+            return jsonify({"success": True, "mode": mode, "counts": {}}), 200
+
+        read_true_ids = {
+            row[0]
+            for row in calibre_db.session.query(read_column.book)
+            .filter(read_column.book.in_(all_book_ids), read_column.value == True)
+            .all()
+        }
+        unread_ids = all_book_ids - read_true_ids
+        counts = {
+            shelf_id: sum(1 for book_id in books if book_id in unread_ids)
+            for shelf_id, books in shelf_to_books.items()
+        }
+        return jsonify({"success": True, "mode": mode, "counts": counts}), 200
+
+    return jsonify({"success": True, "mode": mode, "counts": {}}), 200
+
+
+@shelf.route("/shelf/bulkadd/<int:shelf_id>", methods=["POST"])
+@user_login_required
+def bulk_add_to_shelf(shelf_id):
+    selections = _parse_selection_ids_from_request()
+    shelf_obj = ub.session.query(ub.Shelf).filter(ub.Shelf.id == shelf_id).first()
+    if shelf_obj is None:
+        return jsonify({"success": False, "msg": _("Invalid shelf specified")}), 400
+    if not check_shelf_edit_permissions(shelf_obj):
+        return jsonify({"success": False, "msg": _("Sorry you are not allowed to add a book to that shelf")}), 403
+    if not selections:
+        return jsonify({"success": False, "msg": _("No books selected")}), 400
+
+    if len(selections) > MAX_BULK_SHELF_SELECTION:
+        return jsonify({
+            "success": False,
+            "msg": _("Too many books selected (max %(max)d)", max=MAX_BULK_SHELF_SELECTION),
+        }), 400
+
+    # Validate book ids exist in calibre db.
+    existing_book_ids = {
+        row[0]
+        for row in calibre_db.session.query(db.Books.id)
+        .filter(db.Books.id.in_(selections))
+        .all()
+    }
+    invalid_ids = [book_id for book_id in selections if book_id not in existing_book_ids]
+    valid_ids = [book_id for book_id in selections if book_id in existing_book_ids]
+
+    if not valid_ids:
+        return jsonify({"success": False, "msg": _("No valid books selected"), "invalid": invalid_ids}), 400
+
+    already_in_shelf = {
+        row[0]
+        for row in ub.session.query(ub.BookShelf.book_id)
+        .filter(ub.BookShelf.shelf == shelf_id)
+        .filter(ub.BookShelf.book_id.in_(valid_ids))
+        .all()
+    }
+    to_add = [book_id for book_id in valid_ids if book_id not in already_in_shelf]
+
+    if not to_add:
+        return jsonify({
+            "success": True,
+            "added": 0,
+            "already_in_shelf": len(valid_ids),
+            "invalid": invalid_ids,
+            "msg": _("Books are already part of the shelf: %(name)s", name=shelf_obj.name),
+        }), 200
+
+    try:
+        max_order = ub.session.query(func.max(ub.BookShelf.order)).filter(ub.BookShelf.shelf == shelf_id).first()[0] or 0
+        for book_id in to_add:
+            max_order += 1
+            shelf_obj.books.append(ub.BookShelf(shelf=shelf_id, book_id=book_id, order=max_order))
+        shelf_obj.last_modified = datetime.now(timezone.utc)
+        ub.session.commit()
+    except (OperationalError, InvalidRequestError) as e:
+        ub.session.rollback()
+        log.error_or_exception("Settings Database error: {}".format(e))
+        error = getattr(e, 'orig', e)
+        return jsonify({"success": False, "msg": _("Oops! Database Error: %(error)s.", error=error)}), 500
+
+    return jsonify({
+        "success": True,
+        "added": len(to_add),
+        "already_in_shelf": len(already_in_shelf),
+        "invalid": invalid_ids,
+        "msg": _("Books have been added to shelf: %(sname)s", sname=shelf_obj.name),
+    }), 200
+
+
+@shelf.route("/shelf/bulkremove/<int:shelf_id>", methods=["POST"])
+@user_login_required
+def bulk_remove_from_shelf(shelf_id):
+    selections = _parse_selection_ids_from_request()
+    shelf_obj = ub.session.query(ub.Shelf).filter(ub.Shelf.id == shelf_id).first()
+    if shelf_obj is None:
+        return jsonify({"success": False, "msg": _("Invalid shelf specified")}), 400
+    if not check_shelf_edit_permissions(shelf_obj):
+        return jsonify({"success": False, "msg": _("Sorry you are not allowed to remove a book from this shelf")}), 403
+    if not selections:
+        return jsonify({"success": False, "msg": _("No books selected")}), 400
+
+    if len(selections) > MAX_BULK_SHELF_SELECTION:
+        return jsonify({
+            "success": False,
+            "msg": _("Too many books selected (max %(max)d)", max=MAX_BULK_SHELF_SELECTION),
+        }), 400
+
+    existing_links = ub.session.query(ub.BookShelf.book_id)
+    existing_links = existing_links.filter(ub.BookShelf.shelf == shelf_id)
+    existing_links = existing_links.filter(ub.BookShelf.book_id.in_(selections)).all()
+    existing_in_shelf = {row[0] for row in existing_links}
+    not_in_shelf = [book_id for book_id in selections if book_id not in existing_in_shelf]
+
+    if not existing_in_shelf:
+        return jsonify({
+            "success": True,
+            "removed": 0,
+            "not_in_shelf": len(not_in_shelf),
+            "msg": _("No selected books were part of this shelf"),
+        }), 200
+
+    try:
+        removed_count = ub.session.query(ub.BookShelf)
+        removed_count = removed_count.filter(ub.BookShelf.shelf == shelf_id)
+        removed_count = removed_count.filter(ub.BookShelf.book_id.in_(list(existing_in_shelf)))
+        removed_count = removed_count.delete(synchronize_session=False)
+        shelf_obj.last_modified = datetime.now(timezone.utc)
+        ub.session.commit()
+    except (OperationalError, InvalidRequestError) as e:
+        ub.session.rollback()
+        log.error_or_exception("Settings Database error: {}".format(e))
+        error = getattr(e, 'orig', e)
+        return jsonify({"success": False, "msg": _("Oops! Database Error: %(error)s.", error=error)}), 500
+
+    return jsonify({
+        "success": True,
+        "removed": int(removed_count or 0),
+        "not_in_shelf": len(not_in_shelf),
+        "msg": _("Books have been removed from shelf: %(sname)s", sname=shelf_obj.name),
+    }), 200
 
 
 @shelf.route("/shelf/add/<int:shelf_id>/<int:book_id>", methods=["POST"])

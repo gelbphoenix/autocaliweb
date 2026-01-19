@@ -65,10 +65,11 @@ def get_best_fit(width, height, image_width, image_height):
 
 
 class TaskGenerateCoverThumbnails(CalibreTask):
-    def __init__(self, book_id=-1, task_message=''):
+    def __init__(self, book_id=-1, task_message='', batch_size=100):
         super(TaskGenerateCoverThumbnails, self).__init__(task_message)
         self.log = logger.create()
         self.book_id = book_id
+        self.batch_size = batch_size
         self.app_db_session = ub.get_new_session_instance()
         self.cache = fs.FileSystem()
         self.resolutions = [
@@ -84,18 +85,26 @@ class TaskGenerateCoverThumbnails(CalibreTask):
             count = len(books_with_covers)
 
             total_generated = 0
-            for i, book in enumerate(books_with_covers):
+            processed_books = 0
 
+            for i, book in enumerate(books_with_covers):
                 # Generate new thumbnails for missing covers
                 generated = self.create_book_cover_thumbnails(book)
 
-                # Increment the progress
-                self.progress = (1.0 / count) * i
-
                 if generated > 0:
                     total_generated += generated
-                    self.message = N_('Generated %(count)s cover thumbnails', count=total_generated)
 
+                processed_books += 1
+                
+                # Increment the progress
+                self.progress = min(0.99, (float(i + 1) / count))
+
+                if processed_books % 10 == 0 or generated > 0:
+                    if total_generated > 0:
+                        self.message = N_('Generated %(count)s cover thumbnails', count=total_generated)
+                    else:
+                        self.message = N_('Processed %(count)s of %(total)s books', count=processed_books)
+                
                 # Check if job has been cancelled or ended
                 if self.stat == STAT_CANCELLED:
                     self.log.info(f'GenerateCoverThumbnails task has been cancelled.')
@@ -107,6 +116,10 @@ class TaskGenerateCoverThumbnails(CalibreTask):
 
             if total_generated == 0:
                 self.self_cleanup = True
+            else:
+                self.message = N_('Generated %(count)s cover thumbnails', count=total_generated)
+
+            self.progress = 1.0
 
         self._handleSuccess()
         self.app_db_session.remove()

@@ -207,14 +207,12 @@ See the requirements [here](https://github.com/gelbphoenix/autocaliweb/wiki/Manu
 ## Troubleshooting
 
 - **Common Issues**:
-
   - If you experience issues starting the application, check the log files located in the `logs` directory for error messages.
   - If eBooks fail to load, verify that the `Location of Calibre database` is correctly set and that the database file is accessible.
 
 - **Configuration Errors**: Ensure that your Calibre database is compatible and properly formatted. Refer to the Calibre documentation for guidance on maintaining the database.
 
 - **Performance Problems**:
-
   - If the application is slow, consider increasing the allocated resources (CPU/RAM) to your server or optimizing the Calibre database by removing duplicates and unnecessary entries.
   - Regularly clear the cache in your web browser to improve loading times.
 
@@ -231,6 +229,18 @@ Autocaliweb has an **not finished** documentation in the [wiki of this repositor
 ## Contributing to Autocaliweb
 
 To contribute, please check our [Contributing Guidelines](https://github.com/gelbphoenix/autocaliweb/blob/main/CONTRIBUTING.md). We welcome issues, feature requests, and pull requests from the community.
+
+### JavaScript linting (ESLint)
+
+This repository includes a modern ESLint v9 setup (flat config) for the browser JavaScript under `cps/static/js/`.
+
+- Install dev dependencies: `npm install`
+- Run lint: `npm run lint`
+- Run lint (CI alias): `npm run lint:ci`
+- Auto-fix what ESLint can: `npm run lint:fix`
+- Fail the build on any warnings (stricter mode): `npm run lint:strict`
+
+Configuration lives in `eslint.config.js`.
 
 ### Reporting Bugs
 

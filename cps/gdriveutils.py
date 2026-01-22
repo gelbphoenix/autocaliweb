@@ -176,7 +176,7 @@ class PermissionAdded(Base):
         return str(self.gdrive_id)
 
 
-if not os.path.exists(cli_param.gd_path):
+if not cli_param.gd_path or not os.path.exists(cli_param.gd_path):
     try:
         Base.metadata.create_all(engine)
     except Exception as ex:

@@ -20,8 +20,133 @@
 
 var selections = [];
 var reload = false;
+var selectionSet = new Set();
+
+var booksTableI18n = null;
+
+function getBooksTableI18n() {
+    var el = document.getElementById('books-table-i18n');
+    return el && el.dataset ? el.dataset : {};
+}
+
+function btI18n(key, fallback) {
+    if (booksTableI18n === null) {
+        booksTableI18n = getBooksTableI18n();
+    }
+    if (booksTableI18n && booksTableI18n[key]) {
+        return booksTableI18n[key];
+    }
+    return fallback;
+}
+
+function btFormatNamed(template, values) {
+    if (!template) return '';
+    var result = String(template).replace(/%\(([^)]+)\)s/g, function (match, key) {
+        if (!values || values[key] === undefined || values[key] === null) {
+            return match;
+        }
+        return String(values[key]);
+    });
+
+    if (values) {
+        Object.keys(values).forEach(function (key) {
+            var token = '__' + String(key).toUpperCase() + '__';
+            result = result.split(token).join(String(values[key]));
+        });
+    }
+
+    return result;
+}
+
+function syncSelectionSet() {
+    selectionSet = new Set(
+        $.map(selections, function (id) {
+            return Number(id);
+        })
+    );
+}
+
+function updateSelectionStatus() {
+    var $el = $('#selection-status');
+    if (!$el.length) return;
+    if (selections.length) {
+        $el.text(btFormatNamed(btI18n('selectionCount', '%(count)s selected'), {count: selections.length}));
+    } else {
+        $el.text('');
+    }
+}
+
+function setBulkShelfButtonsEnabled(enabled) {
+    ['#bulk_add_to_shelf', '#bulk_remove_from_shelf'].forEach(function (selector) {
+        var $btn = $(selector);
+        if (!$btn.length) return;
+        $btn.toggleClass('disabled', !enabled);
+        $btn.attr('aria-disabled', !enabled);
+        $btn.prop('disabled', !enabled);
+    });
+}
+
+function attachBooksTableExtrasToSearch() {
+    var $table = $('#books-table');
+    if (!$table.length) return;
+
+    var $bootstrapTable = $table.closest('.bootstrap-table');
+    var $search = $bootstrapTable.find('.fixed-table-toolbar .search');
+    if (!$search.length) return;
+
+    // Place selection controls to the right of the search input.
+    var $selectionActions = $('#books-table-selection-actions');
+    if ($selectionActions.length && !$selectionActions.data('moved')) {
+        $selectionActions.data('moved', true);
+        $selectionActions.appendTo($search);
+    }
+
+    var $selectionStatus = $('#selection-status');
+    if ($selectionStatus.length && !$selectionStatus.data('moved')) {
+        $selectionStatus.data('moved', true);
+        $selectionStatus.appendTo($search);
+    }
+}
+
+function showBulkShelfActionStatus(message, type, linkHref, linkText) {
+    var $status = $('#bulk-shelf-action-status');
+    if (!$status.length) return;
+
+    var $text = $status.find('.bulk-shelf-status-text');
+    var $link = $status.find('.bulk-shelf-status-link');
+
+    $status
+        .removeClass('alert-success alert-danger alert-warning alert-info')
+        .addClass(type === 'success' ? 'alert-success'
+            : type === 'warning' ? 'alert-warning'
+                : type === 'info' ? 'alert-info'
+                    : 'alert-danger');
+
+    if ($text.length) {
+        $text.text(message || '');
+    } else {
+        $status.text(message || '');
+    }
+
+    if ($link.length && linkHref) {
+        $link.attr('href', linkHref);
+        $link.text(linkText || btI18n('viewShelf', 'View shelf'));
+        $link.show();
+    } else if ($link.length) {
+        $link.hide();
+    }
+
+    $status.show();
+    setTimeout(function () {
+        $status.fadeOut(400);
+    }, 10000);
+}
 
 $(function() {
+    $(document).on('click', '#bulk-shelf-action-status-close', function () {
+        $('#bulk-shelf-action-status').hide();
+    });
+
     $('#tasktable').bootstrapTable({
         formatNoMatches: function () {
             return '';
@@ -74,6 +199,9 @@ $(function() {
                 var func = $.inArray(e.type, ["check", "check-all"]) > -1 ? "union" : "difference";
                 selections = window._[func](selections, ids);
             }
+            syncSelectionSet();
+            updateSelectionStatus();
+            setBulkShelfButtonsEnabled(selections.length >= 1);
             if (selections.length >= 2) {
                 $("#merge_books").removeClass("disabled");
                 $("#merge_books").attr("aria-disabled", false);
@@ -133,6 +261,108 @@ $(function() {
 
         });
 
+    $("#bulk-add-to-shelves, #bulk-remove-from-shelves").on(
+        'click',
+        'a[data-bulk-shelf-action]',
+        function (e) {
+            e.preventDefault();
+            if (selections.length < 1) {
+                showBulkShelfActionStatus(btI18n('noBooksSelected', 'No books selected'), 'danger');
+                return;
+            }
+            var url = $(this).data('href');
+            if (!url) return;
+
+            var shelfMatch = String(url).match(/\/(?:shelf)\/(?:bulkadd|bulkremove)\/(\d+)/);
+            var shelfId = shelfMatch ? shelfMatch[1] : null;
+            var shelfName = $(this).text().trim();
+            var shelfUrl = shelfId ? getPath() + '/shelf/' + shelfId : null;
+
+            $.ajax({
+                method: 'post',
+                contentType: 'application/json; charset=utf-8',
+                dataType: 'json',
+                url: url,
+                data: JSON.stringify({selections: selections}),
+            })
+                .done(function (res) {
+                    if (res && res.success === false) {
+                        showBulkShelfActionStatus(res.msg || btI18n('error', 'Error'), 'danger');
+                        return;
+                    }
+
+                    var action = res && res.removed !== undefined ? 'remove' : 'add';
+                    var added = res && typeof res.added === 'number' ? res.added : 0;
+                    var already = res && typeof res.already_in_shelf === 'number' ? res.already_in_shelf : 0;
+                    var removed = res && typeof res.removed === 'number' ? res.removed : 0;
+                    var notIn = res && typeof res.not_in_shelf === 'number' ? res.not_in_shelf : 0;
+                    var invalid = res && res.invalid && res.invalid.length ? res.invalid.length : 0;
+
+                    var msg = 'OK';
+                    var level = 'success';
+
+                    if (action === 'add') {
+                        if (added === 0 && already > 0) {
+                            level = 'info';
+                            msg = btFormatNamed(
+                                btI18n('bulkNoChangesAlready', 'No changes — all selected books are already on shelf “%(shelf)s”.'),
+                                {shelf: shelfName}
+                            );
+                        } else {
+                            msg = btFormatNamed(
+                                btI18n('bulkAdded', 'Added %(count)s to shelf “%(shelf)s”.'),
+                                {count: added, shelf: shelfName}
+                            );
+                            if (already) {
+                                msg += ' ' + btFormatNamed(
+                                    btI18n('bulkAlreadyOnShelf', '%(count)s already on shelf.'),
+                                    {count: already}
+                                );
+                            }
+                        }
+                        if (invalid) {
+                            msg += ' ' + btFormatNamed(btI18n('bulkInvalid', '%(count)s invalid.'), {count: invalid});
+                        }
+                    } else {
+                        if (removed === 0 && notIn > 0) {
+                            level = 'info';
+                            msg = btFormatNamed(
+                                btI18n('bulkNoChangesNotOn', 'No changes — none of the selected books were on shelf “%(shelf)s”.'),
+                                {shelf: shelfName}
+                            );
+                        } else {
+                            msg = btFormatNamed(
+                                btI18n('bulkRemoved', 'Removed %(count)s from shelf “%(shelf)s”.'),
+                                {count: removed, shelf: shelfName}
+                            );
+                            if (notIn) {
+                                msg += ' ' + btFormatNamed(
+                                    btI18n('bulkNotOnShelf', '%(count)s not on shelf.'),
+                                    {count: notIn}
+                                );
+                            }
+                        }
+                    }
+
+                    showBulkShelfActionStatus(msg, level, shelfUrl, shelfUrl ? btI18n('viewShelf', 'View shelf') : null);
+                    $("#books-table").bootstrapTable("refresh");
+                    $("#books-table").bootstrapTable("uncheckAll");
+                    if (window.refreshShelfCountPills) {
+                        window.refreshShelfCountPills();
+                    }
+                })
+                .fail(function (xhr) {
+                    var msg = btI18n('error', 'Error');
+                    if (xhr && xhr.responseJSON && xhr.responseJSON.msg) {
+                        msg = xhr.responseJSON.msg;
+                    } else if (xhr && xhr.responseText) {
+                        msg = xhr.responseText;
+                    }
+                    showBulkShelfActionStatus(msg, 'danger');
+                });
+        }
+    );
+
     // Small block to initialize the state of the author/title sort inputs in metadata form
     {
         let checkA = $('#autoupdate_authorsort').prop('checked');
@@ -155,6 +385,114 @@ $(function() {
 
     $("#delete_selection").click(function() {
         $("#books-table").bootstrapTable("uncheckAll");
+    });
+
+    $('#selection-actions').on('click', 'a[data-selection-action]', function (e) {
+        e.preventDefault();
+        var action = $(this).data('selection-action');
+        var $table = $('#books-table');
+        if (!$table.length) return;
+
+        if (action === 'select-page') {
+            $table.bootstrapTable('checkAll');
+            return;
+        }
+
+        if (action === 'clear-page') {
+            var pageRows = $table.bootstrapTable('getData') || [];
+            var pageIds = $.map(pageRows, function (row) {
+                return row.id;
+            });
+            try {
+                $table.bootstrapTable('uncheckBy', {field: 'id', values: pageIds});
+            } catch (err) {
+                selections = window._.difference(selections, pageIds);
+                syncSelectionSet();
+                updateSelectionStatus();
+                setBulkShelfButtonsEnabled(selections.length >= 1);
+                $table.bootstrapTable('refresh');
+            }
+            return;
+        }
+
+        if (action === 'clear-all') {
+            $table.bootstrapTable('uncheckAll');
+            return;
+        }
+
+        if (action === 'select-all-results') {
+            if (!window.BOOKS_TABLE_ALL_IDS_URL) return;
+            var opts = $table.bootstrapTable('getOptions') || {};
+            var searchText = opts.searchText || '';
+
+            $('#selection-status').text(btI18n('loading', 'Loading…'));
+            $.ajax({
+                method: 'get',
+                dataType: 'json',
+                url: window.BOOKS_TABLE_ALL_IDS_URL,
+                data: {search: searchText, max: 10000},
+            })
+                .done(function (res) {
+                    if (!res || res.success === false) {
+                        $('#selection-status').text((res && res.msg) || btI18n('error', 'Error'));
+                        return;
+                    }
+
+                    var total = res.total || 0;
+                    var ids = res.ids || [];
+                    var confirmText = res.truncated
+                        ? btFormatNamed(
+                            btI18n('selectResultsConfirmTruncated', 'Select %(shown)s of %(total)s results?'),
+                            {shown: ids.length, total: total}
+                        )
+                        : btFormatNamed(
+                            btI18n('selectResultsConfirm', 'Select %(count)s results?'),
+                            {count: total}
+                        );
+
+                    var applySelection = function () {
+                        selections = window._.union(selections, ids);
+                        syncSelectionSet();
+                        updateSelectionStatus();
+                        setBulkShelfButtonsEnabled(selections.length >= 1);
+
+                        if (res.truncated) {
+                            $('#selection-status').text(
+                                btFormatNamed(
+                                    btI18n('selectedTruncated', '%(shown)s selected (truncated from %(total)s)'),
+                                    {shown: ids.length, total: total}
+                                )
+                            );
+                        }
+
+                        $table.bootstrapTable('refresh');
+                    };
+
+                    var cancelSelection = function () {
+                        updateSelectionStatus();
+                    };
+
+                    if (typeof window.confirmDialog === 'function' && $('#GeneralChangeModal').length) {
+                        window.confirmDialog(
+                            'select_all_results',
+                            'GeneralChangeModal',
+                            null,
+                            applySelection,
+                            cancelSelection,
+                            {header: '', main: confirmText}
+                        );
+                    } else {
+                        if (!window.confirm(confirmText)) {
+                            updateSelectionStatus();
+                            return;
+                        }
+                        applySelection();
+                    }
+                })
+                .fail(function () {
+                    $('#selection-status').text(btI18n('error', 'Error'));
+                });
+        }
     });
 
     $("#merge_confirm").click(function() {
@@ -491,6 +829,12 @@ $(function() {
         formatNoMatches: function () {
             return "";
         },
+        onPostHeader: function () {
+            attachBooksTableExtrasToSearch();
+        },
+        onLoadSuccess: function () {
+            attachBooksTableExtrasToSearch();
+        },
         // eslint-disable-next-line no-unused-vars
         onEditableSave: function (field, row, oldvalue, $el) {
             if ($.inArray(field, [ "title", "sort" ]) !== -1 && $('#autoupdate_titlesort').prop('checked')
@@ -531,6 +875,9 @@ $(function() {
             });
         },
     });
+
+    // Make sure toolbar exists before moving controls.
+    setTimeout(attachBooksTableExtrasToSearch, 0);
 
     $("#domain_allow_submit").click(function(event) {
         event.preventDefault();
@@ -934,7 +1281,7 @@ function TaskActions (value, row) {
 /* Function for keeping checked rows */
 function responseHandler(res) {
     $.each(res.rows, function (i, row) {
-        row.state = $.inArray(row.id, selections) !== -1;
+        row.state = selectionSet.has(row.id);
     });
     return res;
 }

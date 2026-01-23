@@ -100,7 +100,7 @@ _start_time = time.time()
 def add_security_headers(resp):
     default_src = ([host.strip() for host in config.config_trustedhosts.split(',') if host] +
                    ["'self'", "'unsafe-inline'", "'unsafe-eval'"])
-    
+
     csp = "default-src " + ' '.join(default_src)
     if request.endpoint == "web.read_book" and config.config_use_google_drive:
         csp +=" blob: "
@@ -873,7 +873,7 @@ def health_check():
         db_up = True
     except Exception:
         db_up = False
-    
+
     return jsonify({
         "status": "ok" if db_up else "degraded",
         "uptime": round(uptime, 2),
@@ -999,6 +999,37 @@ def list_books():
     response = make_response(js_list)
     response.headers["Content-Type"] = "application/json; charset=utf-8"
     return response
+
+
+@web.route("/ajax/listbookids")
+@user_login_required
+def list_book_ids():
+    search_param = request.args.get("search")
+    try:
+        max_results = int(request.args.get("max") or 10000)
+    except ValueError:
+        max_results = 10000
+    max_results = max(1, min(max_results, 50000))
+
+    if search_param:
+        q = calibre_db.search_query(search_param, config).with_entities(db.Books.id)
+    else:
+        q = calibre_db.session.query(db.Books.id).filter(calibre_db.common_filters(allow_show_archived=True))
+
+    try:
+        total = q.count()
+        ids = [row[0] for row in q.limit(max_results).all()]
+    except Exception as ex:
+        log.error_or_exception(ex)
+        return jsonify({"success": False, "msg": _("Oops! Database Error: %(error)s.", error=ex)}), 500
+
+    return jsonify({
+        "success": True,
+        "ids": ids,
+        "total": total,
+        "truncated": total > max_results,
+        "max": max_results,
+    }), 200
 
 
 @web.route("/ajax/table_settings", methods=['POST'])
@@ -1491,12 +1522,12 @@ def render_login(username="", password=""):
 def login():
     if current_user is not None and current_user.is_authenticated:
         return redirect(url_for('web.index'))
-    
+
     redirect_parameter = request.args.get("noredir", default=False, type=bool)
-    
+
     if (config.config_oauth_auto_redirect and 3 in oauth_check) and not redirect_parameter:
         return redirect(url_for('generic.login'))
-    
+
     if config.config_login_type == constants.LOGIN_LDAP and not services.ldap:
         log.error(u"Cannot activate LDAP authentication")
         flash(_(u"Cannot activate LDAP authentication"), category="error")
@@ -1631,7 +1662,7 @@ def change_profile(kobo_support, hardcover_support, local_oauth_check, oauth_sta
         current_user.hardcover_token = to_save.get("hardcover_token", "").replace("Bearer ", "") or ""
         current_user.auto_send_enabled = to_save.get("auto_send_enabled") == "on"
         current_user.auto_metadata_fetch = to_save.get("auto_metadata_fetch") == "on"
-        
+
     except Exception as ex:
         flash(str(ex), category="error")
         return render_title_template("user_edit.html",

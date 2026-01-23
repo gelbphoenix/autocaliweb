@@ -1,5 +1,4 @@
 name: Update Docker Hub Description
-# Automatically mirrors the README to the project's DockerHub page
 
 on:
   push:
@@ -8,6 +7,7 @@ on:
     paths:
       - README.md
       - .github/workflows/dockerhub-description.yml
+
 jobs:
   dockerHubDescription:
     runs-on: ubuntu-latest
@@ -15,10 +15,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Docker Hub Description
-        uses: peter-evans/dockerhub-description@v4
+        uses: peter-evans/dockerhub-description@v5
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: gelbphoenix/autocaliweb
-          short-description: ${{ github.event.repository.description }}
           enable-url-completion: true

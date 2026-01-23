@@ -1,12 +1,3 @@
----
-name: Pull request
-about: Suggest changes or improvements for Autocaliweb
-title: "[PR] ..."
-labels: ["review"]
-projects: "gelbphoenix/2"
-assignees: ""
----
-
 ## Description
 
 Brief description of the changes in this pull request.
@@ -66,7 +57,7 @@ If this change affects file handling, please list the formats and file types you
 - [ ] PDF files
 - [ ] CBR/CBZ comic files
 - [ ] MOBI files
-- [ ] Other: ****\_\_\_****
+- [ ] Other: \***\*\_\_\_\*\***
 
 ## Checklist
 

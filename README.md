@@ -1,5 +1,8 @@
 # ![Logo Light](https://github.com/gelbphoenix/autocaliweb/raw/refs/heads/main/cps/static/icon-light.svg) Autocaliweb
 
+> [!IMPORTANT]
+> Since 1st Febuary 2026 the development of Autocaliweb moved to Codeberg -> [gelbphoenix/autocaliweb on Codeberg.org](https://codeberg.org/gelbphoenix/autocaliweb)
+
 Autocaliweb is a web app that offers a clean and intuitive interface for browsing, reading, and downloading eBooks using a valid [Calibre](https://calibre-ebook.com) database.
 
 [![License](https://img.shields.io/github/license/gelbphoenix/autocaliweb?style=flat-square)](https://github.com/gelbphoenix/autocaliweb/blob/main/LICENSE)

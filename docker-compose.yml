@@ -9,6 +9,9 @@ services:
       - TZ=Etc/UTC
       - PUID=1000
       - PGID=1000
+      # Optional, but highly recommended to maintain data across
+      # container recreations, if you recreate the container often.
+      # - CACHE_DIR=/config/cache
     volumes:
       - /path/to/config:/config
       - /path/to/book/ingest:/acw-book-ingest

@@ -24,6 +24,7 @@ __package__ = "cps"
 import sys
 import os
 import mimetypes
+import hashlib
 
 from flask import Flask
 from .MyLoginManager import MyLoginManager
@@ -31,8 +32,6 @@ from flask_principal import Principal
 from werkzeug.middleware.proxy_fix import ProxyFix
 from flask.sessions import SecureCookieSessionInterface
 from itsdangerous import URLSafeTimedSerializer, Signer
-import hashlib
-import itsdangerous 
 
 from . import logger
 from .cli import CliParameter
@@ -87,6 +86,64 @@ mimetypes.add_type('text/rtf', '.rtf')
 
 log = logger.create()
 
+
+def _install_runtime_debug_hooks():
+    """Install low-overhead debugging hooks for live CPU/memory investigations.
+    Useful for diagnosing issues like high CPU usage or memory leaks, especially
+    for devs of this codebase.
+
+    Enable with env var `ACW_DEBUG_SIGNALS=1` (default: disabled).
+
+    - Send SIGUSR1 to dump stack traces of all threads (faulthandler).
+    - Send SIGUSR2 to dump top tracemalloc allocations (if available).
+    """
+    if os.environ.get("ACW_DEBUG_SIGNALS", "0") not in {"1", "true", "TRUE", "yes", "YES"}:
+        return
+
+    # We only need these additional, heavier imports if debug signals are enabled.
+    try:
+        import faulthandler
+        import signal
+        import tracemalloc
+    except ImportError as e:
+        log.info("Debug signals: could not import required module(s): %s. "
+                 "Returning gracefully without installing hooks.", e)
+        return
+
+    try:
+        faulthandler.enable(all_threads=True)
+        try:
+            if hasattr(signal, "SIGUSR1"):
+                faulthandler.register(signal.SIGUSR1, all_threads=True)
+                log.info("Debug signals: send SIGUSR1 to dump thread stacks")
+        except Exception:  # pylint: disable=broad-except
+            pass
+    except Exception:  # pylint: disable=broad-except
+        return
+
+    try:
+        tracemalloc.start(25)
+
+        def _dump_tracemalloc(_signum, _frame):
+            try:
+                snap = tracemalloc.take_snapshot()
+                top = snap.statistics("lineno")
+                log.warning("tracemalloc: top allocations (lineno)")
+                for stat in top[:50]:
+                    log.warning("tracemalloc: %s", stat)
+            except Exception:  # pylint: disable=broad-except
+                log.exception("tracemalloc dump failed")
+
+        try:
+            if hasattr(signal, "SIGUSR2"):
+                signal.signal(signal.SIGUSR2, _dump_tracemalloc)
+                log.info("Debug signals: send SIGUSR2 to dump tracemalloc top allocations")
+        except Exception:  # pylint: disable=broad-except
+            pass
+    except Exception:  # pylint: disable=broad-except
+        pass
+
+
 class SHA256SessionInterface(SecureCookieSessionInterface):
     def get_signing_serializer(self, app):
         if not app.secret_key:
@@ -102,10 +159,8 @@ class SHA256SessionInterface(SecureCookieSessionInterface):
             signer_kwargs=signer_kwargs
         )
 
-# Force itsdangerous to avoid SHA1 in FIPS environments.
-# itsdangerous lazily resolves SHA1 internally; this override
-# replaces it with SHA256 to remain FIPS-compliant.
-itsdangerous.signer._lazy_sha1 = hashlib.sha256
+# We set Signer.default_digest_method later in create_app() to force SHA256
+# (avoids touching protected internals like `_lazy_sha1`).
 
 app = Flask(__name__)
 app.config.update(
@@ -159,6 +214,9 @@ def create_app():
     config_sql.load_configuration(ub.session, encrypt_key)
     app.secret_key = os.getenv('SECRET_KEY', config_sql.get_flask_session_key(ub.session))
     config.init_config(ub.session, encrypt_key, cli_param)
+
+    # Install live-debug hooks early so they work even during high CPU.
+    _install_runtime_debug_hooks()
 
     if error:
         log.error(error)

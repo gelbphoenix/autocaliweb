@@ -99,6 +99,18 @@ class _Settings(_Base):
     config_public_reg = Column(SmallInteger, default=0)
     config_remote_login = Column(Boolean, default=False)
     config_kobo_sync = Column(Boolean, default=False)
+    # Kobo sync: how Autocaliweb Shelves map to Kobo Collections.
+    # Values: 'all' | 'selected' | 'hybrid'
+    config_kobo_sync_collections_mode = Column(String, default="selected")
+
+    # When collections mode is 'selected', optionally also sync generated shelves as Kobo collections
+    # but only for books that are in shelves marked for Kobo sync.
+    config_kobo_sync_include_generated_shelves_in_selected = Column(Boolean, default=False)
+    # Maximum items per sync response (books, reading states, collections). Clamped to [10, 500].
+    config_kobo_sync_item_limit = Column(Integer, default=100)
+    # When True (and include_generated_shelves_in_selected is True), sync ALL generated shelves
+    # for ALL eligible books in the library, not just books in Kobo-synced shelves.
+    config_kobo_sync_all_generated_shelves = Column(Boolean, default=False)
 
     config_use_hardcover = Column(Boolean, default=False)
     config_hardcover_api_token = Column(String)
@@ -117,6 +129,10 @@ class _Settings(_Base):
     config_denied_column_value = Column(String, default="")
     config_allowed_column_value = Column(String, default="")
 
+    # UI configuration: generate shelves dynamically from a multi-value Calibre column
+    # Values are either built-in identifiers (e.g. 'tags') or custom column selectors (e.g. 'cc:12')
+    config_generate_shelves_from_calibre_column = Column(String, default="")
+
     config_use_google_drive = Column(Boolean, default=False)
     config_google_drive_folder = Column(String)
     config_google_drive_watch_changes_response = Column(JSON, default={})
@@ -129,6 +145,9 @@ class _Settings(_Base):
     config_oauth_auto_redirect = Column(Boolean, default=False)
 
     config_kobo_proxy = Column(Boolean, default=False)
+    # When True, do not call Kobo Store /v1/library/sync to merge store results into the local sync response.
+    # Useful for fully-offline/self-hosted setups.
+    config_kobo_disable_store_sync_merge = Column(Boolean, default=False)
 
     config_ldap_provider_url = Column(String, default='example.org')
     config_ldap_port = Column(SmallInteger, default=389)

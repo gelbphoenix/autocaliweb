@@ -17,6 +17,7 @@
 #   along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import os
+import uuid
 from shutil import copyfile, copyfileobj
 from urllib.request import urlopen
 from io import BytesIO
@@ -91,6 +92,10 @@ class TaskGenerateCoverThumbnails(CalibreTask):
                 # Generate new thumbnails for missing covers
                 generated = self.create_book_cover_thumbnails(book)
 
+                # Increment the progress
+                # Progress is based on books scanned (not thumbnails).
+                self.progress = (1.0 / count) * (i + 1) if count else 1.0
+
                 if generated > 0:
                     total_generated += generated
 
@@ -139,33 +144,60 @@ class TaskGenerateCoverThumbnails(CalibreTask):
             .filter(ub.Thumbnail.type == constants.THUMBNAIL_TYPE_COVER) \
             .filter(ub.Thumbnail.entity_id == book_id) \
             .filter(or_(ub.Thumbnail.expiration.is_(None), ub.Thumbnail.expiration > datetime.now(timezone.utc))) \
+            .order_by(ub.Thumbnail.generated_at.desc(), ub.Thumbnail.id.desc()) \
             .all()
 
     def create_book_cover_thumbnails(self, book):
+        def norm_fmt(fmt: str) -> str:
+            fmt = (fmt or '').lower()
+            return 'jpg' if fmt == 'jpeg' else fmt
+
         generated = 0
         book_cover_thumbnails = self.get_book_cover_thumbnails(book.id)
 
         thumb_map = {}
+        duplicates_to_delete = []
         for t in book_cover_thumbnails:
-            thumb_map[(t.resolution, t.format.lower())] = t
+            key = (t.resolution, norm_fmt(t.format))
+            if key not in thumb_map:
+                thumb_map[key] = t
+            else:
+                duplicates_to_delete.append(t)
+
+        duplicate_ids = {t.id for t in duplicates_to_delete if getattr(t, 'id', None) is not None}
 
         # For each resolution, check if a thumbnail exists and file is present
         formats = ['jpg', 'webp']
         for resolution in self.resolutions:
             for fmt in formats:
                 thumb = thumb_map.get((resolution, fmt))
-                file_missing = True
                 if thumb:
+                    # Normalize legacy alias format in-place.
+                    if (thumb.format or '').lower() == 'jpeg':
+                        thumb.format = 'jpg'
                     file_missing = not self.cache.get_cache_file_exists(thumb.filename, constants.CACHE_TYPE_THUMBNAILS)
-                if not thumb or file_missing:
+                    if file_missing:
+                        generated += 1
+                        # Re-generate into the existing thumbnail row to avoid creating duplicate DB entries.
+                        self.update_book_cover_thumbnail(book, thumb)
+                else:
                     generated += 1
-                    self.create_book_cover_single_thumbnail(book, resolution)
+                    self.create_book_cover_single_thumbnail_format(book, resolution, fmt)
 
         # Replace outdated or missing thumbnails
         for thumbnail in book_cover_thumbnails:
             try:
-                legacy_naming = not (thumbnail.filename.startswith('book_') or thumbnail.filename.startswith('series_'))
-                wrong_format = thumbnail.format.lower() not in formats
+                # Skip duplicates we intend to delete.
+                if getattr(thumbnail, 'id', None) in duplicate_ids:
+                    continue
+
+                # "Legacy" refers to older book_/series_ naming. UUID-based filenames are current.
+                legacy_naming = thumbnail.filename.startswith('book_') or thumbnail.filename.startswith('series_')
+
+                fmt_norm = norm_fmt(thumbnail.format)
+                if (thumbnail.format or '').lower() == 'jpeg':
+                    thumbnail.format = 'jpg'
+                wrong_format = fmt_norm not in formats
                 source_newer = book.last_modified.replace(tzinfo=None) > thumbnail.generated_at
 
                 if legacy_naming or wrong_format:
@@ -175,7 +207,7 @@ class TaskGenerateCoverThumbnails(CalibreTask):
 
                     for fmt in formats:
                         self.create_book_cover_single_thumbnail_format(book, thumbnail.resolution, fmt)
-                    
+
                     try:
                         self.cache.delete_cache_file(old_filename, constants.CACHE_TYPE_THUMBNAILS)
                     except FileNotFoundError:
@@ -184,7 +216,7 @@ class TaskGenerateCoverThumbnails(CalibreTask):
                         self.log.error(f"Failed to delete old thumbnail {old_filename}: {e}")
 
                     generated += 1
-                    
+
                     continue
 
                 if source_newer:
@@ -193,23 +225,45 @@ class TaskGenerateCoverThumbnails(CalibreTask):
 
             except Exception as ex:
                 self.log.debug(f'Thumbnail migration/update issue for book {book.id}: {ex}')
-                
+
+        # Delete duplicate rows (and their orphan files) for this book.
+        if duplicates_to_delete:
+            try:
+                for dup in duplicates_to_delete:
+                    try:
+                        self.cache.delete_cache_file(dup.filename, constants.CACHE_TYPE_THUMBNAILS)
+                    except Exception:
+                        pass
+                    self.app_db_session.delete(dup)
+                self.app_db_session.commit()
+            except Exception:
+                self.app_db_session.rollback()
+
         return generated
-    
-    
+
+
     def create_book_cover_single_thumbnail_format(self, book, resolution, fmt):
         thumbnail = ub.Thumbnail()
+        # Set uuid/filename eagerly so we can write the file before committing the DB row.
+        # This prevents the DB from accumulating thumbnail rows when file generation is slow
+        # or the task is interrupted.
+        thumbnail.uuid = str(uuid.uuid4())
         thumbnail.type = constants.THUMBNAIL_TYPE_COVER
         thumbnail.entity_id = book.id
         thumbnail.format = fmt
         thumbnail.resolution = resolution
         thumbnail.generated_at = datetime.now(timezone.utc)
         thumbnail.expiration = datetime.now(timezone.utc) + timedelta(days=10)
+        thumbnail.filename = f"{thumbnail.uuid}.{fmt}"
 
         self.app_db_session.add(thumbnail)
         try:
-            self.app_db_session.commit()
             self.generate_book_thumbnail(book, thumbnail)
+            self.app_db_session.commit()
+        except FileNotFoundError as ex:
+            # Missing cover file: treat as non-fatal and avoid repeated retry noise.
+            self.log.debug(f'Skipping {fmt.upper()} book thumbnail for book {getattr(book, "id", "?")}: {ex}')
+            self.app_db_session.rollback()
         except Exception as ex:
             self.log.debug(f'Error creating {fmt.upper()} book thumbnail: ' + str(ex))
             self._handleError(f'Error creating {fmt.upper()} book thumbnail: ' + str(ex))
@@ -230,6 +284,14 @@ class TaskGenerateCoverThumbnails(CalibreTask):
             self.app_db_session.commit()
             self.cache.delete_cache_file(thumbnail.filename, constants.CACHE_TYPE_THUMBNAILS)
             self.generate_book_thumbnail(book, thumbnail)
+        except FileNotFoundError as ex:
+            # Missing cover file: drop the thumbnail record so we don't retry endlessly.
+            self.log.debug(f'Skipping update of book thumbnail for book {getattr(book, "id", "?")}: {ex}')
+            try:
+                self.app_db_session.delete(thumbnail)
+                self.app_db_session.commit()
+            except Exception:
+                self.app_db_session.rollback()
         except Exception as ex:
             self.log.debug('Error updating book thumbnail: ' + str(ex))
             self._handleError('Error updating book thumbnail: ' + str(ex))
@@ -271,7 +333,7 @@ class TaskGenerateCoverThumbnails(CalibreTask):
             else:
                 book_cover_filepath = os.path.join(config.get_book_path(), book.path, 'cover.jpg')
                 if not os.path.isfile(book_cover_filepath):
-                    raise Exception('Book cover file not found')
+                    raise FileNotFoundError(book_cover_filepath)
 
                 with Image(filename=book_cover_filepath) as img:
                     height = get_resize_height(thumbnail.resolution)
@@ -599,7 +661,7 @@ class TaskCleanupExpiredThumbnails(CalibreTask):
     def __init__(self, message=N_("Cleanup expired thumbnails")):
         super().__init__(message)
         self.log = logger.create()
-        self.app_db_session = ub.get_new_session_instance()        
+        self.app_db_session = ub.get_new_session_instance()
         self.cache = fs.FileSystem()
 
     def run(self, worker_thread):
@@ -621,14 +683,14 @@ class TaskCleanupExpiredThumbnails(CalibreTask):
                                 .limit(batch_size)
                                 .offset(offset)
                                 .all())
-                    
+
                     if not old_thumbs:
                         break
 
                     for thumbnail in old_thumbs:
                         thumbnail.expiration = datetime.now(timezone.utc) + timedelta(days=1)
                         migrated_count += 1
-                        
+
                     self.app_db_session.commit()
                     self.log.debug(f"Migrated batch: {len(old_thumbs)} old thumbnails")
                     offset += batch_size
@@ -637,7 +699,7 @@ class TaskCleanupExpiredThumbnails(CalibreTask):
 
                 while True:
                     expired = self.app_db_session.query(ub.Thumbnail).filter(
-                        (ub.Thumbnail.expiration.isnot(None)) & 
+                        (ub.Thumbnail.expiration.isnot(None)) &
                         (ub.Thumbnail.expiration <= datetime.now(timezone.utc))
                     ).limit(batch_size).offset(offset).all()
 
@@ -650,12 +712,12 @@ class TaskCleanupExpiredThumbnails(CalibreTask):
                         try:
                             if self.cache.get_cache_file_exists(thumb.filename, constants.CACHE_TYPE_THUMBNAILS):
                                 filepath = self.cache.get_cache_file_path(thumb.filename, constants.CACHE_TYPE_THUMBNAILS)
-                                
+
                                 try:
                                     freed_space += os.path.getsize(filepath)
                                 except OSError:
                                     pass
-                                
+
                                 self.cache.delete_cache_file(thumb.filename, constants.CACHE_TYPE_THUMBNAILS)
 
                                 self.app_db_session.delete(thumb)
@@ -689,10 +751,10 @@ class TaskCleanupExpiredThumbnails(CalibreTask):
     @property
     def name(self):
         return N_("Cleanup Expired Thumbnail")
-        
+
     def __str__(self):
         return "Cleanup expired Thumbnails"
-        
+
     @property
     def is_cancellable(self):
         return False

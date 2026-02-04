@@ -68,7 +68,7 @@ class AutoLibrary:
     # Check for a metadata.db file in the given library dir and returns False if one doesn't exist
     # and True if one does exist, while also updating metadb_path to the path of the found metadata.db file
     # In the case of multiple metadata.db files, the user is notified and the one with the largest filesize is chosen
-    def check_for_existing_library(self) -> bool: 
+    def check_for_existing_library(self) -> bool:
         files_in_library = [os.path.join(dirpath,f) for (dirpath, dirnames, filenames) in os.walk(self.library_dir) for f in filenames]
         db_files = [f for f in files_in_library if "metadata.db" in f]
         if len(db_files) == 1:
@@ -105,7 +105,24 @@ class AutoLibrary:
                 print("[acw-auto-library] Updating Settings Database with library location...")
                 con = sqlite3.connect(self.app_db)
                 cur = con.cursor()
-                cur.execute(f'UPDATE settings SET config_calibre_dir="{self.lib_path}";')
+                row = cur.execute('SELECT config_calibre_dir FROM settings LIMIT 1;').fetchone()
+                existing_dir = row[0] if row else None
+
+                # Do not overwrite an existing, valid user configuration.
+                if existing_dir:
+                    try:
+                        existing_metadata = os.path.join(existing_dir, "metadata.db")
+                        if os.path.exists(existing_metadata):
+                            print(
+                                "[acw-auto-library] Existing config_calibre_dir looks valid; leaving it unchanged: "
+                                f"{existing_dir}"
+                            )
+                            return
+                    except Exception:
+                        # If existing_dir is malformed/unusable, fall through and update.
+                        pass
+
+                cur.execute('UPDATE settings SET config_calibre_dir=?;', (self.lib_path,))
                 con.commit()
                 return
             except Exception as e:

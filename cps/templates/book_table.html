@@ -121,7 +121,7 @@
         </button>
         <ul id="bulk-add-to-shelves" class="dropdown-menu" aria-labelledby="bulk_add_to_shelf">
           {% for shelf in g.shelves_access %}
-            {% if not shelf.is_public or current_user.role_edit_shelfs() %}
+            {% if (not shelf.is_generated) and (not shelf.is_public or current_user.role_edit_shelfs()) %}
               <li>
                 <a href="#" data-bulk-shelf-action="add" data-href="{{ url_for('shelf.bulk_add_to_shelf', shelf_id=shelf.id) }}">
                   {{ shelf.name }}{% if shelf.is_public == 1 %} {{ _('(Public)') }}{% endif %}
@@ -140,7 +140,7 @@
         </button>
         <ul id="bulk-remove-from-shelves" class="dropdown-menu" aria-labelledby="bulk_remove_from_shelf">
           {% for shelf in g.shelves_access %}
-            {% if not shelf.is_public or current_user.role_edit_shelfs() %}
+            {% if (not shelf.is_generated) and (not shelf.is_public or current_user.role_edit_shelfs()) %}
               <li>
                 <a href="#" data-bulk-shelf-action="remove" data-href="{{ url_for('shelf.bulk_remove_from_shelf', shelf_id=shelf.id) }}">
                   {{ shelf.name }}{% if shelf.is_public == 1 %} {{ _('(Public)') }}{% endif %}

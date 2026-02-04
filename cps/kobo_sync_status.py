@@ -18,15 +18,17 @@
 
 
 from .cw_login import current_user
-from . import ub
+from . import ub, logger
 from datetime import datetime, timezone
 from sqlalchemy.sql.expression import or_, and_, true
 # from sqlalchemy import exc
 
+log = logger.create()
+
 
 # Add the current book id to kobo_synced_books table for current user, if entry is already present,
 # do nothing (safety precaution)
-def add_synced_books(book_id):
+def add_synced_books(book_id, reason=None):
     is_present = ub.session.query(ub.KoboSyncedBooks).filter(ub.KoboSyncedBooks.book_id == book_id)\
         .filter(ub.KoboSyncedBooks.user_id == current_user.id).count()
     if not is_present:
@@ -35,20 +37,49 @@ def add_synced_books(book_id):
         synced_book.book_id = book_id
         ub.session.add(synced_book)
         ub.session_commit()
+        log.debug(
+            "KoboSync mark-synced user=%s book=%s reason=%s",
+            current_user.id,
+            book_id,
+            reason or "<unspecified>",
+        )
+    else:
+        log.debug(
+            "KoboSync already-synced user=%s book=%s reason=%s",
+            current_user.id,
+            book_id,
+            reason or "<unspecified>",
+        )
 
 
 # Select all entries of current book in kobo_synced_books table, which are from current user and delete them
-def remove_synced_book(book_id, all=False, session=None):
-    if not all:
-        user = ub.KoboSyncedBooks.user_id == current_user.id
+def remove_synced_book(book_id, all=False, session=None, reason=None, user_id=None):
+    if all:
+        user_filter = true()
     else:
-        user = true()
+        effective_user_id = user_id
+        if effective_user_id is None:
+            effective_user_id = getattr(current_user, "id", None)
+        if effective_user_id is None:
+            raise RuntimeError("remove_synced_book requires user_id when not running in a request context")
+        user_filter = ub.KoboSyncedBooks.user_id == effective_user_id
     if not session:
-        ub.session.query(ub.KoboSyncedBooks).filter(ub.KoboSyncedBooks.book_id == book_id).filter(user).delete()
+        ub.session.query(ub.KoboSyncedBooks).filter(ub.KoboSyncedBooks.book_id == book_id).filter(user_filter).delete()
         ub.session_commit()
     else:
-        session.query(ub.KoboSyncedBooks).filter(ub.KoboSyncedBooks.book_id == book_id).filter(user).delete()
+        session.query(ub.KoboSyncedBooks).filter(ub.KoboSyncedBooks.book_id == book_id).filter(user_filter).delete()
         ub.session_commit(_session=session)
+
+    try:
+        log.debug(
+            "KoboSync unmark-synced user=%s book=%s all=%s reason=%s",
+            "<all>" if all else user_id if user_id is not None else getattr(current_user, "id", None),
+            book_id,
+            bool(all),
+            reason or "<unspecified>",
+        )
+    except Exception:
+        pass
 
 
 def change_archived_books(book_id, state=None, message=None):

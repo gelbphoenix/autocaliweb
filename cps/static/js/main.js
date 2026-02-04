@@ -19,7 +19,7 @@ function getPath() {
     var jsFileLocation = $("script[src*=jquery]").attr("src"); // the js file path
     return jsFileLocation.substr(
         0,
-        jsFileLocation.search("/static/js/libs/jquery.min.js")
+        jsFileLocation.search("/static/js/libs/jquery.min.js"),
     ); // the js folder path
 }
 
@@ -59,7 +59,7 @@ function postButton(event, action, location = "") {
                 name: "csrf_token",
                 value: $("input[name='csrf_token']").val(),
                 type: "hidden",
-            })
+            }),
         )
         .appendTo("body");
     if (location !== "") {
@@ -69,7 +69,7 @@ function postButton(event, action, location = "") {
                     name: "location",
                     value: location,
                     type: "hidden",
-                })
+                }),
             )
             .appendTo("body");
     }
@@ -99,7 +99,7 @@ if ("serviceWorker" in navigator) {
                         navigator.serviceWorker.controller
                     ) {
                         console.log(
-                            "[ACW Service Worker] New Version available"
+                            "[ACW Service Worker] New Version available",
                         );
                         newWorker.postMessage({ type: "SKIP_WAITING" });
                         window.location.reload();
@@ -110,7 +110,7 @@ if ("serviceWorker" in navigator) {
             setInterval(() => reg.update(), 3600000);
         })
         .catch((err) =>
-            console.error("Service Worker registration failed:", err)
+            console.error("Service Worker registration failed:", err),
         );
 }
 
@@ -132,18 +132,27 @@ $(document).on("change", 'input[type="checkbox"][data-control]', function () {
 $(document).on("change", "select[data-control]", function () {
     var $this = $(this);
     var name = $this.data("control");
-    var showOrHide = parseInt($this.val(), 10);
-    // var showOrHideLast = $("#" + name + " option:last").val()
+    var selectedValue = $this.val();
+    var isNumeric = /^-?\d+$/.test(String(selectedValue));
+    var selectedNumeric = isNumeric ? parseInt(selectedValue, 10) : null;
+
     for (var i = 0; i < $(this)[0].length; i++) {
-        var element = parseInt($(this)[0][i].value, 10);
-        if (element === showOrHide) {
-            $(
-                "[data-related^=" + name + "][data-related*=-" + element + "]"
-            ).show();
+        var optionValue = $(this)[0][i].value;
+        var optionNumeric = isNumeric ? parseInt(optionValue, 10) : null;
+        var isSelected = isNumeric
+            ? optionNumeric === selectedNumeric
+            : String(optionValue) === String(selectedValue);
+
+        var selector =
+            '[data-related^="' +
+            name +
+            '"][data-related*="-' +
+            optionValue +
+            '"]';
+        if (isSelected) {
+            $(selector).show();
         } else {
-            $(
-                "[data-related^=" + name + "][data-related*=-" + element + "]"
-            ).hide();
+            $(selector).hide();
         }
     }
 });
@@ -281,7 +290,10 @@ function confirmDialog(id, dialogid, dataValue, yesFn, noFn, textOverrides) {
             $confirm.modal("hide");
         });
 
-    if (textOverrides && (textOverrides.header !== undefined || textOverrides.main !== undefined)) {
+    if (
+        textOverrides &&
+        (textOverrides.header !== undefined || textOverrides.main !== undefined)
+    ) {
         if (textOverrides.header !== undefined) {
             $("#header-" + dialogid).html(textOverrides.header);
         }
@@ -323,7 +335,7 @@ $("#delete_confirm").click(function (event) {
                                 $(
                                     "button[data-delete-format='" +
                                         item.format +
-                                        "']"
+                                        "']",
                                 ).addClass("hidden");
                             }
                             $(".navbar").after(
@@ -335,7 +347,7 @@ $("#delete_confirm").click(function (event) {
                                     '">' +
                                     item.message +
                                     "</div>" +
-                                    "</div>"
+                                    "</div>",
                             );
                         }
                     });
@@ -351,7 +363,7 @@ $("#delete_confirm").click(function (event) {
             postButton(
                 event,
                 getPath() + "/delete/" + deleteId,
-                (location = loc)
+                (location = loc),
             );
         }
     }
@@ -379,6 +391,12 @@ $("#deleteModal").on("show.bs.modal", function (e) {
 $(function () {
     var updateTimerID;
     var updateText;
+
+    // Refresh shelf count pills on initial load (including generated shelves).
+    // The server-side render may not have counts for all shelves.
+    if (typeof refreshShelfCountPills === "function") {
+        refreshShelfCountPills();
+    }
 
     // Allow ajax prefilters to be added/removed dynamically
     // eslint-disable-next-line new-cap
@@ -489,7 +507,7 @@ $(function () {
                             entry.name +
                             "</td><td>" +
                             entry.size +
-                            "</td></tr>"
+                            "</td></tr>",
                     ).appendTo($("#file_table"));
                 });
             },
@@ -523,7 +541,7 @@ $(function () {
                     $(" a:not(.dropdown-toggle) ").removeAttr("data-toggle");
                 }
                 $(".load-more .row").isotope("appended", $(data), null);
-            }
+            },
         );
 
         // fix for infinite scroll on CaliBlur Theme (#981)
@@ -537,7 +555,7 @@ $(function () {
                     window.history.replaceState(
                         {},
                         null,
-                        $loadMore.infiniteScroll("getAbsolutePath")
+                        $loadMore.infiniteScroll("getAbsolutePath"),
                     );
                 }
             });
@@ -603,7 +621,7 @@ $(function () {
                                     entry[0] +
                                     "</td><td>" +
                                     entry[1] +
-                                    "</td></tr>"
+                                    "</td></tr>",
                             ).appendTo($("#update_table"));
                         });
                         cssClass = "alert-warning";
@@ -637,7 +655,7 @@ $(function () {
                     dataType: "json",
                     url: getPath() + "/ajax/updateThumbnails",
                 });
-            }
+            },
         );
     });
 
@@ -757,7 +775,7 @@ $(function () {
                 });
                 $("#config_delete_kobo_token").hide();
                 $("#kobo_full_sync").hide();
-            }
+            },
         );
     });
 
@@ -777,7 +795,7 @@ $(function () {
         var status = $("#toggle_order_shelf").hasClass("dummy") ? "on" : "off";
         $("#toggle_order_shelf").data(
             "alt-text",
-            $("#toggle_order_shelf").html()
+            $("#toggle_order_shelf").html(),
         );
         $("#toggle_order_shelf").html(alternative_text);
 
@@ -799,12 +817,12 @@ $(function () {
                 var subform = $("#user_submit").closest("form");
                 subform.submit(function (eventObj) {
                     $(this).append(
-                        '<input type="hidden" name="delete" value="True" />'
+                        '<input type="hidden" name="delete" value="True" />',
                     );
                     return true;
                 });
                 subform.submit();
-            }
+            },
         );
     });
 
@@ -835,18 +853,34 @@ $(function () {
                                         '">' +
                                         item.message +
                                         "</div>" +
-                                        "</div>"
+                                        "</div>",
                                 );
                             }
                         });
                     },
                 });
-            }
+            },
         );
     });
 
     $("#user_submit").click(function () {
+        var $modeSelect = $("#kobo_sync_collections_mode");
+        if ($modeSelect.length) {
+            var originalMode = $modeSelect.data("original-mode") || "";
+            var currentMode = $modeSelect.val() || "";
+            if (originalMode && currentMode && originalMode !== currentMode) {
+                // Mode changed - show confirmation modal
+                $("#kobo_mode_change_modal").modal("show");
+                return;
+            }
+        }
         this.closest("form").submit();
+    });
+
+    // Handle confirmation of Kobo mode change
+    $("#kobo_mode_change_confirm").click(function () {
+        $("#kobo_mode_change_modal").modal("hide");
+        $("#user_submit").closest("form").submit();
     });
 
     function handle_response(data) {
@@ -861,7 +895,7 @@ $(function () {
                         '">' +
                         item.message +
                         "</div>" +
-                        "</div>"
+                        "</div>",
                 );
             });
         }
@@ -908,7 +942,7 @@ $(function () {
                             "db_submit",
                             "GeneralChangeModal",
                             0,
-                            changeDbSettings
+                            changeDbSettings,
                         );
                     } else {
                         changeDbSettings();
@@ -951,7 +985,7 @@ $(function () {
                 } else {
                     handle_response(data.result);
                 }
-            }
+            },
         );
     });
 
@@ -962,7 +996,7 @@ $(function () {
             $(this).data("value"),
             function (value) {
                 postButton(event, $("#delete_shelf").data("action"));
-            }
+            },
         );
     });
 
@@ -975,11 +1009,11 @@ $(function () {
         $("#file_confirm").data("link", target.data("link"));
         $("#file_confirm").data(
             "folderonly",
-            typeof folder === "undefined" ? false : true
+            typeof folder === "undefined" ? false : true,
         );
         $("#file_confirm").data(
             "filefilter",
-            typeof filter === "undefined" ? "" : filter
+            typeof filter === "undefined" ? "" : filter,
         );
         $("#file_confirm").data("newfile", target.data("newfile"));
         fillFileTable(path, "dir", folder, filter);

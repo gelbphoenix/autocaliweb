@@ -1,0 +1,24 @@
+{% extends "layout.html" %}
+{% block body %}
+<div class="discover">
+  <h1>{{title}}</h1>
+  <form role="form" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group">
+      <label for="title">{{_('Title')}}</label>
+      <input type="text" class="form-control" name="title" id="title" value="{{ shelf.name }}" disabled>
+      <p class="help-block">{{_('Generated shelves are created automatically from your library metadata and cannot be renamed.')}}</p>
+    </div>
+    {% if kobo_sync_enabled and sync_only_selected_shelves %}
+      <div class="checkbox">
+          <label>
+            <input type="checkbox" name="kobo_sync" {% if kobo_sync_checked %}checked{% endif %}>
+            {{ _('Sync this shelf with Kobo device') }}
+          </label>
+      </div>
+    {% endif %}
+    <button type="submit" class="btn btn-default" id="submit">{{_('Save')}}</button>
+    <a href="{{ url_for('shelf.show_generated_shelf', source=shelf.source, value=shelf.value) }}" class="btn btn-default">{{_('Cancel')}}</a>
+  </form>
+</div>
+{% endblock %}

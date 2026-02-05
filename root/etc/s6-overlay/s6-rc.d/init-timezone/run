@@ -1,0 +1,27 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+
+# Apply timezone as early as possible, before services start.
+# This prevents the app from starting in UTC and switching later.
+
+TZ_VALUE="${TZ:-}"
+if [[ -z "$TZ_VALUE" ]]; then
+  # Fallback to s6's environment accessor if present.
+  TZ_VALUE="$(printcontenv TZ 2>/dev/null || true)"
+fi
+TZ_VALUE="${TZ_VALUE:-Etc/UTC}"
+
+ZONEINFO_FILE="/usr/share/zoneinfo/${TZ_VALUE}"
+
+if [[ -f "$ZONEINFO_FILE" ]]; then
+  CURRENT_LINK="$(readlink -f /etc/localtime 2>/dev/null || true)"
+  if [[ "$CURRENT_LINK" != "$ZONEINFO_FILE" ]]; then
+    echo "[init-timezone] Setting timezone to ${TZ_VALUE}"
+    ln -sfn "$ZONEINFO_FILE" /etc/localtime
+    echo "$TZ_VALUE" > /etc/timezone
+  else
+    echo "[init-timezone] Timezone already set to ${TZ_VALUE}"
+  fi
+else
+  echo "[init-timezone] Zoneinfo '${TZ_VALUE}' not found at ${ZONEINFO_FILE}; keeping current timezone"
+fi

@@ -40,6 +40,7 @@ _This software is a fork of [Calibre-Web](https://github.com/janeczku/calibre-we
 - OPDS feed for eBook reader apps
 - Advanced search and filtering options
 - Custom book collection (shelves) creation
+- Bulk shelf management from the Books List (multi-select add/remove)
 - eBook metadata editing and deletion support
 - Metadata download from various sources (extensible via plugins)
 - eBook conversion through Calibre binaries

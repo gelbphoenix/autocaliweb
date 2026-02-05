@@ -334,7 +334,7 @@
                                 </button>
                                 <ul id="add-to-shelves" class="dropdown-menu" aria-labelledby="add-to-shelf">
                                     {% for shelf in g.shelves_access %}
-                                        {% if not shelf.id in books_shelfs and ( not shelf.is_public or current_user.role_edit_shelfs() ) %}
+                                        {% if (not shelf.is_generated) and (not shelf.id in books_shelfs) and ( not shelf.is_public or current_user.role_edit_shelfs() ) %}
                                             <li>
                                                 <a data-href="{{ url_for('shelf.add_to_shelf', book_id=entry.id, shelf_id=shelf.id) }}"
                                                    data-remove-href="{{ url_for('shelf.remove_from_shelf', book_id=entry.id, shelf_id=shelf.id) }}"
@@ -352,7 +352,7 @@
                                  aria-label="Remove from shelves">
                                 {% if books_shelfs %}
                                     {% for shelf in g.shelves_access %}
-                                        {% if shelf.id in books_shelfs %}
+                                        {% if (not shelf.is_generated) and shelf.id in books_shelfs %}
                                             <a data-href="{{ url_for('shelf.remove_from_shelf', book_id=entry.id, shelf_id=shelf.id) }}"
                                                data-add-href="{{ url_for('shelf.add_to_shelf', book_id=entry.id, shelf_id=shelf.id) }}"
                                                class="btn btn-sm btn-default" role="button"
@@ -363,6 +363,17 @@
                                               {% endif %}></span> {{ shelf.name }}{% if shelf.is_public == 1 %} {{ _('(Public)') }}{% endif %}
                                             </a>
                                         {% endif %}
+                                    {% endfor %}
+                                {% endif %}
+
+                                {% if generated_shelves is defined and generated_shelves %}
+                                    {% for shelf in generated_shelves %}
+                                        <button type="button" class="btn btn-sm btn-default" disabled
+                                                title="{{ generated_shelf_badge_text(shelf.source) }}">
+                                            <span class="glyphicon glyphicon-list shelf shelf-generated-dot"
+                                                  aria-label="{{ generated_shelf_badge_text(shelf.source) }}"></span>
+                                            {{ shelf.name }}
+                                        </button>
                                     {% endfor %}
                                 {% endif %}
                             </div>

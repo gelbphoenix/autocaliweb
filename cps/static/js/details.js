@@ -99,6 +99,92 @@ $("#archived_cb").on("change", function() {
         )
     };
 
+    function parseShelfAndBookFromUrl(url) {
+        if (!url) return null;
+        var match = String(url).match(/\/shelf\/(?:add|remove)\/(\d+)\/(\d+)/);
+        if (!match) return null;
+        return {
+            shelfId: parseInt(match[1], 10),
+            bookId: parseInt(match[2], 10)
+        };
+    }
+
+    function updateShelfEmptyPlaceholder($container) {
+        if (!$container || !$container.length) return;
+
+        var $grid = $container.find('.row.display-flex').first();
+        var $placeholder = $('#shelf-empty-placeholder');
+        if (!$placeholder.length) return;
+
+        var $entryControls = $container.find('#shelf_down, #order_shelf, #toggle_order_shelf, .filterheader');
+        var remaining = $grid.find('.book').length;
+        if (remaining === 0) {
+            $placeholder.removeClass('hidden');
+            $entryControls.addClass('hidden');
+        } else {
+            $placeholder.addClass('hidden');
+            $entryControls.removeClass('hidden');
+        }
+    }
+
+    function initShelfEmptyObserver($container) {
+        if (!$container || !$container.length) return;
+        if (typeof MutationObserver === 'undefined') return;
+
+        var gridEl = $container.find('.row.display-flex').first().get(0);
+        if (!gridEl) return;
+
+        var pending = null;
+        var observer = new MutationObserver(function() {
+            if (pending) {
+                clearTimeout(pending);
+            }
+            pending = setTimeout(function() {
+                pending = null;
+                updateShelfEmptyPlaceholder($container);
+            }, 50);
+        });
+
+        observer.observe(gridEl, { childList: true });
+    }
+
+    function removeBookFromCurrentShelfPage(shelfId, bookId) {
+        var $container = $('.discover[data-current-shelf-id]');
+        if (!$container.length) return;
+
+        var currentShelfId = parseInt($container.data('current-shelf-id'), 10);
+        if (!currentShelfId || currentShelfId !== shelfId) return;
+
+        var $grid = $container.find('.row.display-flex').first();
+        var $book = $grid.find(".book[data-book-id='" + bookId + "']").first();
+        if (!$book.length) return;
+
+        if ($grid.length && typeof $grid.isotope === 'function' && $grid.data('isotope')) {
+            var didUpdate = false;
+            var doUpdate = function() {
+                if (didUpdate) return;
+                didUpdate = true;
+                updateShelfEmptyPlaceholder($container);
+            };
+
+            $grid.one('layoutComplete', doUpdate);
+            $grid.one('arrangeComplete', doUpdate);
+            $grid.isotope('remove', $book).isotope('layout');
+            setTimeout(doUpdate, 300);
+        } else {
+            $book.remove();
+            updateShelfEmptyPlaceholder($container);
+        }
+    }
+
+    $(function() {
+        var $container = $('.discover[data-current-shelf-id]');
+        if ($container.length) {
+            updateShelfEmptyPlaceholder($container);
+            initShelfEmptyObserver($container);
+        }
+    });
+
     $("#add-to-shelves, #remove-from-shelves").on("click", "[data-shelf-action]", function (e) {
         e.preventDefault();
         $.ajax({
@@ -119,6 +205,7 @@ $("#archived_cb").on("change", function() {
                         );
                         break;
                     case "remove":
+                        var parsed = parseShelfAndBookFromUrl($this.data('href'));
                         $("#add-to-shelves").append(
                             templates.add({
                                 add: $this.data("add-href"),
@@ -126,13 +213,20 @@ $("#archived_cb").on("change", function() {
                                 content: $("<div>").text(this.textContent).html(),
                             })
                         );
+                        if (parsed) {
+                            removeBookFromCurrentShelfPage(parsed.shelfId, parsed.bookId);
+                        }
                         break;
                 }
                 this.parentNode.removeChild(this);
+
+                if (window.refreshShelfCountPills) {
+                    window.refreshShelfCountPills();
+                }
             }.bind(this))
             .fail(function(xhr) {
                 var $msg = $("<span/>", { "class": "text-danger"}).text(xhr.responseText);
-                $("#shelf-action-status").html($msg);
+                $("#shelf-action-errors").html($msg);
 
                 setTimeout(function() {
                     $msg.remove();

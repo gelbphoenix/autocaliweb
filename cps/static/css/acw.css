@@ -13,6 +13,28 @@ a.shelf-link {
   gap: 6px;
 }
 
+/* Generated shelf indicator: small dot over the shelf icon */
+.shelf-generated-dot {
+  position: relative;
+}
+
+.shelf-generated-dot::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #45b29d; /* Light theme accent */
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.blur .shelf-generated-dot::after {
+  background: #e59029; /* caliBlur (dark) theme accent */
+}
+
 span.shelf-link-title {
   flex: 1 1 auto;
   min-width: 0;

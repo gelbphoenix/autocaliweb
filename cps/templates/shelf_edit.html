@@ -6,16 +6,19 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="form-group">
       <label for="title">{{_('Title')}}</label>
-      <input type="text" class="form-control" name="title" id="title" value="{{ shelf.name if shelf.name != None }}">
+      <input type="text" class="form-control" name="title" id="title" value="{{ shelf.name if shelf.name != None }}" {% if is_kobo_opt_in_shelf %}disabled{% endif %}>
+      {% if is_kobo_opt_in_shelf %}
+        <p class="help-block">{{_('This is a built-in shelf used for Kobo sync in \"Selected Books\" mode and cannot be renamed or shared.')}}</p>
+      {% endif %}
     </div>
-    {% if current_user.role_edit_shelfs() %}
+    {% if (not is_kobo_opt_in_shelf) and current_user.role_edit_shelfs() %}
       <div class="checkbox">
         <label>
           <input type="checkbox" name="is_public" {% if shelf.is_public == 1 %}checked{% endif %}> {{_('Share with Everyone')}}
         </label>
       </div>
     {% endif %}
-    {% if kobo_sync_enabled and sync_only_selected_shelves %}
+    {% if (not is_kobo_opt_in_shelf) and kobo_sync_enabled and sync_only_selected_shelves %}
       <div class="checkbox">
           <label> <input type="checkbox" name="kobo_sync" {% if shelf.kobo_sync == 1 %}checked{% endif %}>
               {{ _('Sync this shelf with Kobo device') }}

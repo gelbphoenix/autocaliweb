@@ -22,7 +22,6 @@ import shutil
 import chardet
 import ssl
 import sqlite3
-import mimetypes
 
 from werkzeug.datastructures import Headers
 from flask import Response, stream_with_context
@@ -56,7 +55,7 @@ try:
     from pydrive2.drive import GoogleDrive
     from pydrive2.auth import RefreshError
     from pydrive2.files import ApiRequestError
-except ImportError as err:
+except ImportError:
     try:
         from pydrive.auth import GoogleAuth
         from pydrive.drive import GoogleDrive
@@ -67,7 +66,7 @@ except ImportError as err:
         gdrive_support = False
 
 from . import logger, cli_param, config, db
-from .constants import CONFIG_DIR as _CONFIG_DIR
+from .constants import CONFIG_DIR as _CONFIG_DIR, DEFAULT_GDRIVE_FILE
 
 
 SETTINGS_YAML  = os.path.join(_CONFIG_DIR, 'settings.yaml')
@@ -145,7 +144,15 @@ def is_gdrive_ready():
     return os.path.exists(SETTINGS_YAML) and os.path.exists(CREDENTIALS)
 
 
-engine = create_engine('sqlite:///{0}'.format(cli_param.gd_path), echo=False)
+gd_path = cli_param.gd_path or os.path.join(_CONFIG_DIR, DEFAULT_GDRIVE_FILE)
+try:
+    gd_parent = os.path.dirname(gd_path)
+    if gd_parent:
+        os.makedirs(gd_parent, exist_ok=True)
+except Exception:
+    pass
+
+engine = create_engine('sqlite:///{0}'.format(gd_path), echo=False)
 Base = declarative_base()
 
 # Open session for database connection
@@ -176,11 +183,11 @@ class PermissionAdded(Base):
         return str(self.gdrive_id)
 
 
-if not os.path.exists(cli_param.gd_path):
+if not os.path.exists(gd_path):
     try:
         Base.metadata.create_all(engine)
     except Exception as ex:
-        log.error("Error connect to database: {} - {}".format(cli_param.gd_path, ex))
+        log.error("Error connect to database: {} - {}".format(gd_path, ex))
         raise
 
 

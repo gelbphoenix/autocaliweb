@@ -145,9 +145,29 @@
     {% endif %}
   {% endif %}
     {% if kobo_support and not content.role_anonymous() and not simple%}
+    {% if content.remote_auth_token.first() %}
+    {# Only show Kobo sync settings if user has a sync token #}
     <div class="form-group">
-      <input type="checkbox" name="kobo_only_shelves_sync" id="kobo_only_shelves_sync" {% if content.kobo_only_shelves_sync %}checked{% endif %}>
-      <label for="kobo_only_shelves_sync">{{_('Sync only books in selected shelves with Kobo')}}</label>
+      <label for="kobo_sync_collections_mode">{{_('Shelves [Kobo Collections] Sync Mode')}}</label>
+      <select name="kobo_sync_collections_mode" id="kobo_sync_collections_mode" class="form-control"
+              data-original-mode="{{ content.kobo_sync_collections_mode or 'selected' }}">
+        <option value="all" {% if content.kobo_sync_collections_mode == "all" %}selected{% endif %}>{{_('All Shelves')}}</option>
+        <option value="selected" {% if content.kobo_sync_collections_mode == "selected" %}selected{% endif %}>{{_('Selected Shelves')}}</option>
+        <option value="hybrid" {% if content.kobo_sync_collections_mode == "hybrid" %}selected{% endif %}>{{_('Selected Books (via opt-in Shelf)')}}</option>
+      </select>
+      <p class="help-block">{{_('All Shelves: Sync all books and all Shelves (manual + generated).')}}</p>
+      <p class="help-block">{{_('Selected Shelves: Sync all books, but only Shelves you mark for Kobo sync. Edit a Shelf to enable sync.')}}</p>
+      <p class="help-block">{{_('Selected Books: Only sync books you add to the built-in "Kobo Sync" shelf.')}}</p>
+    </div>
+    <div class="form-group">
+      <label for="kobo_sync_item_limit">{{_('Sync items per batch')}}</label>
+      <input type="number" class="form-control" name="kobo_sync_item_limit" id="kobo_sync_item_limit" value="{{ content.kobo_sync_item_limit if content.kobo_sync_item_limit else 100 }}" min="10" max="500">
+      <p class="help-block">{{_('Number of books to sync per request. Lower values may help with timeout issues on slower devices.')}}</p>
+    </div>
+    <div class="form-group">
+      <input type="checkbox" name="kobo_sync_empty_collections" id="kobo_sync_empty_collections" {% if content.kobo_sync_empty_collections %}checked{% endif %}>
+      <label for="kobo_sync_empty_collections">{{_('Sync empty collections')}}</label>
+      <p class="help-block">{{_('Include collections with 0 books on your Kobo device.')}}</p>
     </div>
     <div class="form-group">
       <input type="checkbox" name="kobo_plus" id="kobo_plus" {% if content.kobo_plus %}checked{% endif %}>
@@ -165,6 +185,7 @@
       <input type="checkbox" name="kobo_instapaper" id="kobo_instapaper" {% if content.kobo_instapaper %}checked{% endif %}>
       <label for="kobo_instapaper">{{_('Enable Instapaper Integration')}}</label>
     </div>
+    {% endif %} {# end if has kobo token #}
     {% endif %}
     </div>
     <div class="col-sm-12">
@@ -199,6 +220,26 @@
 {% block modal %}
 {{ restrict_modal() }}
 {{ delete_confirm_modal() }}
+{# Kobo sync mode change confirmation modal #}
+<div class="modal fade" id="kobo_mode_change_modal" tabindex="-1" role="dialog" aria-labelledby="koboModeChangeLabel">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-warning">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title" id="koboModeChangeLabel">{{_('Confirm Sync Mode Change')}}</h4>
+      </div>
+      <div class="modal-body">
+        <p>{{_('Changing the Kobo sync mode will trigger a full resync with your Kobo device on its next connection.')}}</p>
+        <p>{{_('This may take several minutes depending on your library size.')}}</p>
+        <p><strong>{{_('Do you want to continue?')}}</strong></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">{{_('Cancel')}}</button>
+        <button type="button" class="btn btn-primary" id="kobo_mode_change_confirm">{{_('Continue')}}</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 {% block js %}
 <script src="{{ url_for('static', filename='js/libs/bootstrap-table/bootstrap-table.min.js') }}"></script>

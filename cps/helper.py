@@ -17,112 +17,159 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-import os
-import random
 import io
 import mimetypes
+import os
+import random
 import re
-import regex
 import shutil
 import socket
 from datetime import datetime, timedelta, timezone
-import requests
-import unidecode
+from urllib.parse import quote
 from uuid import uuid4
 
-from flask import send_from_directory, make_response, abort, url_for, Response, request, after_this_request, current_app
+import regex
+import requests
+import unidecode
+from flask import (
+    Response,
+    abort,
+    after_this_request,
+    current_app,
+    make_response,
+    request,
+    send_from_directory,
+    url_for,
+)
+from flask_babel import get_locale
 from flask_babel import gettext as _
 from flask_babel import lazy_gettext as N_
-from flask_babel import get_locale
-from .cw_login import current_user
-from sqlalchemy.sql.expression import true, false, and_, or_, text, func
+from markupsafe import escape
 from sqlalchemy.exc import InvalidRequestError, OperationalError
+from sqlalchemy.sql.expression import and_, false, func, or_, text, true
 from werkzeug.datastructures import Headers
 from werkzeug.security import generate_password_hash
-from markupsafe import escape
-from urllib.parse import quote
+
+from .cw_login import current_user
 
 try:
     from . import cw_advocate
     from .cw_advocate.exceptions import UnacceptableAddressException
+
     use_advocate = True
 except ImportError as e:
     use_advocate = False
     advocate = requests
     UnacceptableAddressException = MissingSchema = BaseException
 
-from . import calibre_db, cli_param
-from .string_helper import strip_whitespaces
-from .tasks.convert import TaskConvert
-from . import logger, config, db, ub, fs
+from . import calibre_db, cli_param, config, db, fs, logger, ub
 from . import gdriveutils as gd
-from .constants import (STATIC_DIR as _STATIC_DIR, CACHE_TYPE_THUMBNAILS, THUMBNAIL_TYPE_COVER, THUMBNAIL_TYPE_SERIES,
-                        SUPPORTED_CALIBRE_BINARIES)
-from .subproc_wrapper import process_wait
-from .services.worker import WorkerThread
-from .tasks.mail import TaskEmail
-from .tasks.thumbnail import TaskClearCoverThumbnailCache, TaskGenerateCoverThumbnails
-from .tasks.metadata_backup import TaskBackupMetadata
-from .file_helper import get_temp_dir
-from .epub_helper import get_content_opf, create_new_metadata_backup, updateEpub, replace_metadata
+from .constants import (
+    CACHE_TYPE_THUMBNAILS,
+    SUPPORTED_CALIBRE_BINARIES,
+    THUMBNAIL_TYPE_COVER,
+    THUMBNAIL_TYPE_SERIES,
+)
+from .constants import STATIC_DIR as _STATIC_DIR
 from .embed_helper import do_calibre_export
+from .epub_helper import (
+    create_new_metadata_backup,
+    get_content_opf,
+    replace_metadata,
+    updateEpub,
+)
+from .file_helper import get_temp_dir
+from .services.worker import WorkerThread
+from .string_helper import strip_whitespaces
+from .subproc_wrapper import process_wait
+from .tasks.convert import TaskConvert
+from .tasks.mail import TaskEmail
+from .tasks.metadata_backup import TaskBackupMetadata
+from .tasks.thumbnail import TaskClearCoverThumbnailCache, TaskGenerateCoverThumbnails
 
 log = logger.create()
 
 try:
+    from wand.exceptions import BlobError, MissingDelegateError
     from wand.image import Image
-    from wand.exceptions import MissingDelegateError, BlobError
+
     use_IM = True
 except (ImportError, RuntimeError) as e:
-    log.debug('Cannot import Image, generating covers from non jpg files will not work: %s', e)
+    log.debug(
+        "Cannot import Image, generating covers from non jpg files will not work: %s", e
+    )
     use_IM = False
     MissingDelegateError = BaseException
 
 
 # Convert existing book entry to new format
-def convert_book_format(book_id, calibre_path, old_book_format, new_book_format, user_id, ereader_mail=None):
+def convert_book_format(
+    book_id, calibre_path, old_book_format, new_book_format, user_id, ereader_mail=None
+):
     book = calibre_db.get_book(book_id)
     data = calibre_db.get_book_format(book.id, old_book_format)
     if not data:
-        error_message = _("%(format)s format not found for book id: %(book)d", format=old_book_format, book=book_id)
+        error_message = _(
+            "%(format)s format not found for book id: %(book)d",
+            format=old_book_format,
+            book=book_id,
+        )
         log.error("convert_book_format: %s", error_message)
         return error_message
     file_path = os.path.join(calibre_path, book.path, data.name)
     if config.config_use_google_drive:
-        if not gd.getFileFromEbooksFolder(book.path, data.name + "." + old_book_format.lower()):
-            error_message = _("%(format)s not found on Google Drive: %(fn)s",
-                              format=old_book_format, fn=data.name + "." + old_book_format.lower())
+        if not gd.getFileFromEbooksFolder(
+            book.path, data.name + "." + old_book_format.lower()
+        ):
+            error_message = _(
+                "%(format)s not found on Google Drive: %(fn)s",
+                format=old_book_format,
+                fn=data.name + "." + old_book_format.lower(),
+            )
             return error_message
     else:
         if not os.path.exists(file_path + "." + old_book_format.lower()):
-            error_message = _("%(format)s not found: %(fn)s",
-                              format=old_book_format, fn=data.name + "." + old_book_format.lower())
+            error_message = _(
+                "%(format)s not found: %(fn)s",
+                format=old_book_format,
+                fn=data.name + "." + old_book_format.lower(),
+            )
             return error_message
     # read settings and append converter task to queue
     if ereader_mail:
         settings = config.get_mail_settings()
-        settings['subject'] = _('Send to eReader')  # pretranslate Subject for Email
-        settings['body'] = _('This Email has been sent via Autocaliweb.')
+        settings["subject"] = _("Send to eReader")  # pretranslate Subject for Email
+        settings["body"] = _("This Email has been sent via Autocaliweb.")
     else:
         settings = dict()
-    link = '<a href="{}">{}</a>'.format(url_for('web.show_book', book_id=book.id), escape(book.title))  # prevent xss
-    txt = "{} -> {}: {}".format(
-           old_book_format.upper(),
-           new_book_format.upper(),
-           link)
-    settings['old_book_format'] = old_book_format
-    settings['new_book_format'] = new_book_format
-    WorkerThread.add(user_id, TaskConvert(file_path, book.id, txt, settings, ereader_mail, user_id))
+    link = '<a href="{}">{}</a>'.format(
+        url_for("web.show_book", book_id=book.id), escape(book.title)
+    )  # prevent xss
+    txt = "{} -> {}: {}".format(old_book_format.upper(), new_book_format.upper(), link)
+    settings["old_book_format"] = old_book_format
+    settings["new_book_format"] = new_book_format
+    WorkerThread.add(
+        user_id, TaskConvert(file_path, book.id, txt, settings, ereader_mail, user_id)
+    )
     return None
 
 
 # Texts are not lazy translated as they are supposed to get send out as is
 def send_test_mail(ereader_mail, user_name):
-    for email in ereader_mail.split(','):
+    for email in ereader_mail.split(","):
         email = strip_whitespaces(email)
-        WorkerThread.add(user_name, TaskEmail(_('Autocaliweb Test Email'), None, None,
-                         config.get_mail_settings(), email, N_("Test Email"),
-                                              _('This Email has been sent via Autocaliweb.')))
+        WorkerThread.add(
+            user_name,
+            TaskEmail(
+                _("Autocaliweb Test Email"),
+                None,
+                None,
+                config.get_mail_settings(),
+                email,
+                N_("Test Email"),
+                _("This Email has been sent via Autocaliweb."),
+            ),
+        )
     return
 
 
@@ -137,38 +184,53 @@ def send_registration_mail(e_mail, user_name, default_password, resend=False):
     txt += "Don't forget to change your password after your first login.\r\n"
     txt += "Regards,\r\n\r\n"
     txt += "Autocaliweb"
-    WorkerThread.add(None, TaskEmail(
-        subject=_('Get Started with Autocaliweb'),
-        filepath=None,
-        attachment=None,
-        settings=config.get_mail_settings(),
-        recipient=e_mail,
-        task_message=N_("Registration Email for user: %(name)s", name=user_name),
-        text=txt
-    ))
+    WorkerThread.add(
+        None,
+        TaskEmail(
+            subject=_("Get Started with Autocaliweb"),
+            filepath=None,
+            attachment=None,
+            settings=config.get_mail_settings(),
+            recipient=e_mail,
+            task_message=N_("Registration Email for user: %(name)s", name=user_name),
+            text=txt,
+        ),
+    )
     return
 
 
 def check_send_to_ereader_with_converter(formats):
     book_formats = list()
-    if 'MOBI' in formats and 'EPUB' not in formats:
-        book_formats.append({'format': 'Epub',
-                             'convert': 1,
-                             'text': _('Convert %(orig)s to %(format)s and send to eReader',
-                                       orig='Mobi',
-                                       format='Epub')})
-    if 'AZW3' in formats and 'EPUB' not in formats:
-        book_formats.append({'format': 'Epub',
-                             'convert': 2,
-                             'text': _('Convert %(orig)s to %(format)s and send to eReader',
-                                       orig='Azw3',
-                                       format='Epub')})
+    if "MOBI" in formats and "EPUB" not in formats:
+        book_formats.append(
+            {
+                "format": "Epub",
+                "convert": 1,
+                "text": _(
+                    "Convert %(orig)s to %(format)s and send to eReader",
+                    orig="Mobi",
+                    format="Epub",
+                ),
+            }
+        )
+    if "AZW3" in formats and "EPUB" not in formats:
+        book_formats.append(
+            {
+                "format": "Epub",
+                "convert": 2,
+                "text": _(
+                    "Convert %(orig)s to %(format)s and send to eReader",
+                    orig="Azw3",
+                    format="Epub",
+                ),
+            }
+        )
     return book_formats
 
 
 def check_send_to_ereader(entry):
     """
-        returns all available book formats for sending to eReader
+    returns all available book formats for sending to eReader
     """
     formats = list()
     book_formats = list()
@@ -176,30 +238,52 @@ def check_send_to_ereader(entry):
         for ele in iter(entry.data):
             if ele.uncompressed_size < config.mail_size:
                 formats.append(ele.format)
-        if 'EPUB' in formats:
-            book_formats.append({'format': 'Epub',
-                                 'convert': 0,
-                                 'text': _('Send %(format)s to eReader', format='Epub')})
-        if 'PDF' in formats:
-            book_formats.append({'format': 'Pdf',
-                                 'convert': 0,
-                                 'text': _('Send %(format)s to eReader', format='Pdf')})
-        if 'AZW' in formats:
-            book_formats.append({'format': 'Azw',
-                                 'convert': 0,
-                                 'text': _('Send %(format)s to eReader', format='Azw')})
+        if "EPUB" in formats:
+            book_formats.append(
+                {
+                    "format": "Epub",
+                    "convert": 0,
+                    "text": _("Send %(format)s to eReader", format="Epub"),
+                }
+            )
+        if "PDF" in formats:
+            book_formats.append(
+                {
+                    "format": "Pdf",
+                    "convert": 0,
+                    "text": _("Send %(format)s to eReader", format="Pdf"),
+                }
+            )
+        if "AZW" in formats:
+            book_formats.append(
+                {
+                    "format": "Azw",
+                    "convert": 0,
+                    "text": _("Send %(format)s to eReader", format="Azw"),
+                }
+            )
         if config.config_converterpath:
             book_formats.extend(check_send_to_ereader_with_converter(formats))
         return book_formats
     else:
-        log.error('Cannot find book entry %d', entry.id)
+        log.error("Cannot find book entry %d", entry.id)
         return None
 
 
 # Check if a reader is existing for any of the book formats, if not, return empty list, otherwise return
 # list with supported formats
 def check_read_formats(entry):
-    extensions_reader = {'TXT', 'PDF', 'EPUB', 'KEPUB', 'CBZ', 'CBT', 'CBR', 'DJVU', 'DJV'}
+    extensions_reader = {
+        "TXT",
+        "PDF",
+        "EPUB",
+        "KEPUB",
+        "CBZ",
+        "CBT",
+        "CBR",
+        "DJVU",
+        "DJV",
+    }
     book_formats = list()
     if len(entry.data):
         for ele in iter(entry.data):
@@ -218,42 +302,62 @@ def send_mail(book_id, book_format, convert, ereader_mail, calibrepath, user_id)
 
     if convert == 1:
         # returns None if success, otherwise errormessage
-        return convert_book_format(book_id, calibrepath, 'mobi', book_format.lower(), user_id, ereader_mail)
+        return convert_book_format(
+            book_id, calibrepath, "mobi", book_format.lower(), user_id, ereader_mail
+        )
     if convert == 2:
         # returns None if success, otherwise errormessage
-        return convert_book_format(book_id, calibrepath, 'azw3', book_format.lower(), user_id, ereader_mail)
+        return convert_book_format(
+            book_id, calibrepath, "azw3", book_format.lower(), user_id, ereader_mail
+        )
 
     for entry in iter(book.data):
         if entry.format.upper() == book_format.upper():
-            converted_file_name = entry.name + '.' + book_format.lower()
-            link = '<a href="{}">{}</a>'.format(url_for('web.show_book', book_id=book_id), escape(book.title))
+            converted_file_name = entry.name + "." + book_format.lower()
+            link = '<a href="{}">{}</a>'.format(
+                url_for("web.show_book", book_id=book_id), escape(book.title)
+            )
             email_text = N_("%(book)s send to eReader", book=link)
-            for email in ereader_mail.split(','):
+            for email in ereader_mail.split(","):
                 email = strip_whitespaces(email)
-                WorkerThread.add(user_id, TaskEmail(_("Send to eReader"), book.path, converted_file_name,
-                                 config.get_mail_settings(), email,
-                                 email_text, _('This Email has been sent via Autocaliweb.'), book.id))
+                WorkerThread.add(
+                    user_id,
+                    TaskEmail(
+                        _("Send to eReader"),
+                        book.path,
+                        converted_file_name,
+                        config.get_mail_settings(),
+                        email,
+                        email_text,
+                        _("This Email has been sent via Autocaliweb."),
+                        book.id,
+                    ),
+                )
             return
     return _("The requested file could not be read. Maybe wrong permissions?")
 
 
-def get_valid_filename(value, replace_whitespace=True, chars=128, force_unidecode=False):
+def get_valid_filename(
+    value, replace_whitespace=True, chars=128, force_unidecode=False
+):
     """
     Returns the given string converted to a string that can be used for a clean
     filename. Limits num characters to 128 max.
     """
-    if value[-1:] == '.':
-        value = value[:-1]+'_'
-    value = value.replace("/", "_").replace(":", "_").strip('\0')
+    if value[-1:] == ".":
+        value = value[:-1] + "_"
+    value = value.replace("/", "_").replace(":", "_").strip("\0")
     if config.config_unicode_filename or force_unidecode:
-        value = (unidecode.unidecode(value))
+        value = unidecode.unidecode(value)
     if replace_whitespace:
         #  *+:\"/<>? are replaced by _
-        value = re.sub(r'[*+:\\\"/<>?]+', '_', value, flags=re.U)
+        value = re.sub(r"[*+:\\\"/<>?]+", "_", value, flags=re.U)
         # pipe has to be replaced with comma
-        value = re.sub(r'[|]+', ',', value, flags=re.U)
+        value = re.sub(r"[|]+", ",", value, flags=re.U)
 
-    value = strip_whitespaces(value.encode('utf-8')[:chars].decode('utf-8', errors='ignore'))
+    value = strip_whitespaces(
+        value.encode("utf-8")[:chars].decode("utf-8", errors="ignore")
+    )
 
     if not value:
         raise ValueError("Filename cannot be empty")
@@ -263,14 +367,18 @@ def get_valid_filename(value, replace_whitespace=True, chars=128, force_unidecod
 def split_authors(values):
     authors_list = []
     for value in values:
-        authors = re.split('[&;]', value)
+        authors = re.split("[&;]", value)
         for author in authors:
-            commas = author.count(',')
+            commas = author.count(",")
             if commas == 1:
-                author_split = author.split(',')
-                authors_list.append(strip_whitespaces(author_split[1]) + ' ' + strip_whitespaces(author_split[0]))
+                author_split = author.split(",")
+                authors_list.append(
+                    strip_whitespaces(author_split[1])
+                    + " "
+                    + strip_whitespaces(author_split[0])
+                )
             elif commas > 1:
-                authors_list.extend([strip_whitespaces(x) for x in author.split(',')])
+                authors_list.extend([strip_whitespaces(x) for x in author.split(",")])
             else:
                 authors_list.append(strip_whitespaces(author))
     return authors_list
@@ -279,7 +387,7 @@ def split_authors(values):
 def get_sorted_author(value):
     value2 = None
     try:
-        if ',' not in value:
+        if "," not in value:
             regexes = [r"^(JR|SR)\.?$", r"^I{1,3}\.?$", r"^IV\.?$"]
             combined = "(" + ")|(".join(regexes) + ")"
             value = value.split(" ")
@@ -305,8 +413,16 @@ def get_sorted_author(value):
 
 def edit_book_read_status(book_id, read_status=None):
     if not config.config_read_column:
-        book = ub.session.query(ub.ReadBook).filter(and_(ub.ReadBook.user_id == int(current_user.id),
-                                                         ub.ReadBook.book_id == book_id)).first()
+        book = (
+            ub.session.query(ub.ReadBook)
+            .filter(
+                and_(
+                    ub.ReadBook.user_id == int(current_user.id),
+                    ub.ReadBook.book_id == book_id,
+                )
+            )
+            .first()
+        )
         if book:
             if read_status is None:
                 if book.read_status == ub.ReadBook.STATUS_FINISHED:
@@ -314,13 +430,19 @@ def edit_book_read_status(book_id, read_status=None):
                 else:
                     book.read_status = ub.ReadBook.STATUS_FINISHED
             else:
-                book.read_status = ub.ReadBook.STATUS_FINISHED if read_status else ub.ReadBook.STATUS_UNREAD
+                book.read_status = (
+                    ub.ReadBook.STATUS_FINISHED
+                    if read_status
+                    else ub.ReadBook.STATUS_UNREAD
+                )
         else:
             read_book = ub.ReadBook(user_id=current_user.id, book_id=book_id)
             read_book.read_status = ub.ReadBook.STATUS_FINISHED
             book = read_book
         if not book.kobo_reading_state:
-            kobo_reading_state = ub.KoboReadingState(user_id=current_user.id, book_id=book_id)
+            kobo_reading_state = ub.KoboReadingState(
+                user_id=current_user.id, book_id=book_id
+            )
             kobo_reading_state.current_bookmark = ub.KoboBookmark()
             kobo_reading_state.statistics = ub.KoboStatistics()
             book.kobo_reading_state = kobo_reading_state
@@ -330,7 +452,9 @@ def edit_book_read_status(book_id, read_status=None):
         try:
             calibre_db.create_functions(config)
             book = calibre_db.get_filtered_book(book_id, True)
-            book_read_status = getattr(book, 'custom_column_' + str(config.config_read_column))
+            book_read_status = getattr(
+                book, "custom_column_" + str(config.config_read_column)
+            )
             if len(book_read_status):
                 if read_status is None:
                     book_read_status[0].value = not book_read_status[0].value
@@ -344,8 +468,13 @@ def edit_book_read_status(book_id, read_status=None):
                 calibre_db.session.commit()
         except (KeyError, AttributeError, IndexError):
             log.error(
-                "Custom Column No.{} does not exist in calibre database".format(config.config_read_column))
-            return "Custom Column No.{} does not exist in calibre database".format(config.config_read_column)
+                "Custom Column No.{} does not exist in calibre database".format(
+                    config.config_read_column
+                )
+            )
+            return "Custom Column No.{} does not exist in calibre database".format(
+                config.config_read_column
+            )
         except (OperationalError, InvalidRequestError) as ex:
             calibre_db.session.rollback()
             log.error("Read status could not set: {}".format(ex))
@@ -356,11 +485,11 @@ def edit_book_read_status(book_id, read_status=None):
 # Deletes a book from the local filestorage, returns True if deleting is successful, otherwise false
 def delete_book_file(book, calibrepath, book_format=None):
     # check that path is 2 elements deep, check that target path has no sub folders
-    if book.path.count('/') == 1:
+    if book.path.count("/") == 1:
         path = os.path.join(calibrepath, book.path)
         if book_format:
             for file in os.listdir(path):
-                if file.upper().endswith("."+book_format):
+                if file.upper().endswith("." + book_format):
                     os.remove(os.path.join(path, file))
             return True, None
         else:
@@ -370,51 +499,84 @@ def delete_book_file(book, calibrepath, book_format=None):
                         for f in files:
                             os.unlink(os.path.join(root, f))
                         if len(folders):
-                            log.warning("Deleting book {} failed, path {} has subfolders: {}".format(book.id,
-                                        book.path, folders))
-                            return True, _("Deleting bookfolder for book %(id)s failed, path has subfolders: %(path)s",
-                                           id=book.id,
-                                           path=book.path)
+                            log.warning(
+                                "Deleting book {} failed, path {} has subfolders: {}".format(
+                                    book.id, book.path, folders
+                                )
+                            )
+                            return True, _(
+                                "Deleting bookfolder for book %(id)s failed, path has subfolders: %(path)s",
+                                id=book.id,
+                                path=book.path,
+                            )
                     shutil.rmtree(path)
                 except (IOError, OSError) as ex:
                     log.error("Deleting book %s failed: %s", book.id, ex)
-                    return False, _("Deleting book %(id)s failed: %(message)s", id=book.id, message=ex)
+                    return False, _(
+                        "Deleting book %(id)s failed: %(message)s",
+                        id=book.id,
+                        message=ex,
+                    )
                 authorpath = os.path.join(calibrepath, os.path.split(book.path)[0])
                 if not os.listdir(authorpath):
                     try:
                         shutil.rmtree(authorpath)
                     except (IOError, OSError) as ex:
-                        log.error("Deleting authorpath for book %s failed: %s", book.id, ex)
+                        log.error(
+                            "Deleting authorpath for book %s failed: %s", book.id, ex
+                        )
                 return True, None
 
-    log.error("Deleting book %s from database only, book path in database not valid: %s",
-              book.id, book.path)
-    return True, _("Deleting book %(id)s from database only, book path in database not valid: %(path)s",
-                   id=book.id,
-                   path=book.path)
+    log.error(
+        "Deleting book %s from database only, book path in database not valid: %s",
+        book.id,
+        book.path,
+    )
+    return True, _(
+        "Deleting book %(id)s from database only, book path in database not valid: %(path)s",
+        id=book.id,
+        path=book.path,
+    )
 
-def rename_all_files_on_change(one_book, new_path, old_path, all_new_name, gdrive=False):
+
+def rename_all_files_on_change(
+    one_book, new_path, old_path, all_new_name, gdrive=False
+):
     for file_format in one_book.data:
         if not gdrive:
             if not os.path.exists(new_path):
                 os.makedirs(new_path)
-            shutil.move(os.path.join(old_path, file_format.name + '.' + file_format.format.lower()),
-                    os.path.join(new_path, all_new_name + '.' + file_format.format.lower()))
+            shutil.move(
+                os.path.join(
+                    old_path, file_format.name + "." + file_format.format.lower()
+                ),
+                os.path.join(new_path, all_new_name + "." + file_format.format.lower()),
+            )
         else:
-            g_file = gd.getFileFromEbooksFolder(old_path,
-                                                file_format.name + '.' + file_format.format.lower())
+            g_file = gd.getFileFromEbooksFolder(
+                old_path, file_format.name + "." + file_format.format.lower()
+            )
             if g_file:
-                gd.moveGdriveFileRemote(g_file, all_new_name + '.' + file_format.format.lower())
-                gd.updateDatabaseOnEdit(g_file['id'], all_new_name + '.' + file_format.format.lower())
+                gd.moveGdriveFileRemote(
+                    g_file, all_new_name + "." + file_format.format.lower()
+                )
+                gd.updateDatabaseOnEdit(
+                    g_file["id"], all_new_name + "." + file_format.format.lower()
+                )
             else:
-                log.error("File {} not found on gdrive"
-                          .format(old_path, file_format.name + '.' + file_format.format.lower()))
+                log.error(
+                    "File {} not found on gdrive".format(
+                        old_path, file_format.name + "." + file_format.format.lower()
+                    )
+                )
 
         # change name in Database
         file_format.name = all_new_name
 
 
-def rename_author_path(first_author, old_author_dir, renamed_author, calibre_path="", gdrive=False):
+def rename_author_path(
+    first_author, old_author_dir, renamed_author, calibre_path="", gdrive=False
+):
     # Create new_author_dir from parameter or from database
     # Create new title_dir from database and add id
     new_authordir = get_valid_filename(first_author, chars=96)
@@ -433,14 +595,28 @@ def rename_author_path(first_author, old_author_dir, renamed_author, calibre_pat
                 try:
                     shutil.move(old_author_path, new_author_path)
                 except OSError as ex:
-                    log.error("Rename author from: %s to %s: %s", old_author_path, new_author_path, ex)
+                    log.error(
+                        "Rename author from: %s to %s: %s",
+                        old_author_path,
+                        new_author_path,
+                        ex,
+                    )
                     log.error_or_exception(ex)
-                    raise Exception(_("Rename author from: '%(src)s' to '%(dest)s' failed with error: %(error)s",
-                             src=old_author_path, dest=new_author_path, error=str(ex)))
+                    raise Exception(
+                        _(
+                            "Rename author from: '%(src)s' to '%(dest)s' failed with error: %(error)s",
+                            src=old_author_path,
+                            dest=new_author_path,
+                            error=str(ex),
+                        )
+                    )
     return new_authordir
 
+
 # Moves files in file storage during author/title rename, or from temp dir to file storage
-def update_dir_structure_file(book_id, calibre_path, original_filepath, new_author, db_filename):
+def update_dir_structure_file(
+    book_id, calibre_path, original_filepath, new_author, db_filename
+):
     # get book database entry from id, if original path overwrite source with original_filepath
     local_book = calibre_db.get_book(book_id)
     if original_filepath:
@@ -449,26 +625,35 @@ def update_dir_structure_file(book_id, calibre_path, original_filepath, new_auth
         path = os.path.join(calibre_path, local_book.path)
 
     # Create (current) author_dir and title_dir from database
-    author_dir = local_book.path.split('/')[0]
-    title_dir = local_book.path.split('/')[1]
+    author_dir = local_book.path.split("/")[0]
+    title_dir = local_book.path.split("/")[1]
 
-    new_title_dir = get_valid_filename(local_book.title, chars=96) + " (" + str(book_id) + ")"
+    new_title_dir = (
+        get_valid_filename(local_book.title, chars=96) + " (" + str(book_id) + ")"
+    )
     if new_author:
         new_author_dir = get_valid_filename(new_author, chars=96)
     else:
         new_author = new_author_dir = author_dir
 
     if title_dir != new_title_dir or author_dir != new_author_dir or original_filepath:
-        error = move_files_on_change(calibre_path,
-                                     new_author_dir,
-                                     new_title_dir,
-                                     local_book,
-                                     db_filename,
-                                     original_filepath,
-                                     path)
-        new_path = os.path.join(calibre_path, new_author_dir, new_title_dir).replace('\\', '/')
-        all_new_name = get_valid_filename(local_book.title, chars=42) + ' - ' \
-                       + get_valid_filename(new_author, chars=42)
+        error = move_files_on_change(
+            calibre_path,
+            new_author_dir,
+            new_title_dir,
+            local_book,
+            db_filename,
+            original_filepath,
+            path,
+        )
+        new_path = os.path.join(calibre_path, new_author_dir, new_title_dir).replace(
+            "\\", "/"
+        )
+        all_new_name = (
+            get_valid_filename(local_book.title, chars=42)
+            + " - "
+            + get_valid_filename(new_author, chars=42)
+        )
         # Book folder already moved, only files need to be renamed
         rename_all_files_on_change(local_book, new_path, new_path, all_new_name)
 
@@ -477,22 +662,32 @@ def update_dir_structure_file(book_id, calibre_path, original_filepath, new_auth
     return False
 
 
-def upload_new_file_gdrive(book_id, first_author, title, title_dir, original_filepath, filename_ext):
+def upload_new_file_gdrive(
+    book_id, first_author, title, title_dir, original_filepath, filename_ext
+):
     book = calibre_db.get_book(book_id)
-    file_name = get_valid_filename(title, chars=42) + ' - ' + \
-        get_valid_filename(first_author, chars=42) + filename_ext
-    gdrive_path = os.path.join(get_valid_filename(first_author, chars=96),
-                               title_dir + " (" + str(book_id) + ")")
+    file_name = (
+        get_valid_filename(title, chars=42)
+        + " - "
+        + get_valid_filename(first_author, chars=42)
+        + filename_ext
+    )
+    gdrive_path = os.path.join(
+        get_valid_filename(first_author, chars=96),
+        title_dir + " (" + str(book_id) + ")",
+    )
     book.path = gdrive_path.replace("\\", "/")
-    gd.uploadFileToEbooksFolder(os.path.join(gdrive_path, file_name).replace("\\", "/"), original_filepath)
+    gd.uploadFileToEbooksFolder(
+        os.path.join(gdrive_path, file_name).replace("\\", "/"), original_filepath
+    )
     return False
 
 
 def update_dir_structure_gdrive(book_id, first_author):
     book = calibre_db.get_book(book_id)
 
-    authordir = book.path.split('/')[0]
-    titledir = book.path.split('/')[1]
+    authordir = book.path.split("/")[0]
+    titledir = book.path.split("/")[1]
     # new_authordir = rename_all_authors(first_author, renamed_author, gdrive=True)
     new_authordir = get_valid_filename(first_author, chars=96)
     new_titledir = get_valid_filename(book.title, chars=96) + " (" + str(book_id) + ")"
@@ -501,27 +696,46 @@ def update_dir_structure_gdrive(book_id, first_author):
         g_file = gd.getFileFromEbooksFolder(authordir, titledir)
         if g_file:
             gd.moveGdriveFileRemote(g_file, new_titledir)
-            book.path = book.path.split('/')[0] + '/' + new_titledir
-            gd.updateDatabaseOnEdit(g_file['id'], book.path)     # only child folder affected
+            book.path = book.path.split("/")[0] + "/" + new_titledir
+            gd.updateDatabaseOnEdit(
+                g_file["id"], book.path
+            )  # only child folder affected
         else:
-            return _('File %(file)s not found on Google Drive', file=book.path)  # file not found
+            return _(
+                "File %(file)s not found on Google Drive", file=book.path
+            )  # file not found
 
     if authordir != new_authordir:
         g_file = gd.getFileFromEbooksFolder(authordir, new_titledir)
         if g_file:
             gd.moveGdriveFolderRemote(g_file, new_authordir, single_book=True)
-            book.path = new_authordir + '/' + book.path.split('/')[1]
-            gd.updateDatabaseOnEdit(g_file['id'], book.path)
+            book.path = new_authordir + "/" + book.path.split("/")[1]
+            gd.updateDatabaseOnEdit(g_file["id"], book.path)
         else:
-            return _('File %(file)s not found on Google Drive', file=authordir)  # file not found
-    if titledir != new_titledir or authordir != new_authordir :
-        all_new_name = get_valid_filename(book.title, chars=42) + ' - ' \
-                       + get_valid_filename(new_authordir, chars=42)
-        rename_all_files_on_change(book, book.path, book.path, all_new_name, gdrive=True)  # todo: Move filenames on gdrive
+            return _(
+                "File %(file)s not found on Google Drive", file=authordir
+            )  # file not found
+    if titledir != new_titledir or authordir != new_authordir:
+        all_new_name = (
+            get_valid_filename(book.title, chars=42)
+            + " - "
+            + get_valid_filename(new_authordir, chars=42)
+        )
+        rename_all_files_on_change(
+            book, book.path, book.path, all_new_name, gdrive=True
+        )  # todo: Move filenames on gdrive
     return False
 
 
-def move_files_on_change(calibre_path, new_author_dir, new_titledir, localbook, db_filename, original_filepath, path):
+def move_files_on_change(
+    calibre_path,
+    new_author_dir,
+    new_titledir,
+    localbook,
+    db_filename,
+    original_filepath,
+    path,
+):
     new_path = os.path.join(calibre_path, new_author_dir, new_titledir)
     try:
         if original_filepath:
@@ -530,9 +744,15 @@ def move_files_on_change(calibre_path, new_author_dir, new_titledir, localbook, 
             try:
                 shutil.move(original_filepath, os.path.join(new_path, db_filename))
             except OSError:
-                log.error("Rename title from {} to {} failed with error, trying to "
-                          "move without metadata".format(path, new_path))
-                shutil.move(original_filepath, os.path.join(new_path, db_filename), copy_function=shutil.copy)
+                log.error(
+                    "Rename title from {} to {} failed with error, trying to "
+                    "move without metadata".format(path, new_path)
+                )
+                shutil.move(
+                    original_filepath,
+                    os.path.join(new_path, db_filename),
+                    copy_function=shutil.copy,
+                )
             log.debug("Moving title: %s to %s", original_filepath, new_path)
         else:
             # Check new path is not valid path
@@ -545,36 +765,51 @@ def move_files_on_change(calibre_path, new_author_dir, new_titledir, localbook, 
                 # Take all files and subfolder from old path (strange command)
                 for dir_name, __, file_list in os.walk(path):
                     for file in file_list:
-                        shutil.move(os.path.join(dir_name, file), os.path.join(new_path + dir_name[len(path):], file))
+                        shutil.move(
+                            os.path.join(dir_name, file),
+                            os.path.join(new_path + dir_name[len(path) :], file),
+                        )
             if not os.listdir(os.path.split(path)[0]):
                 try:
                     shutil.rmtree(os.path.split(path)[0])
                 except (IOError, OSError) as ex:
-                    log.error("Deleting authorpath for book %s failed: %s", localbook.id, ex)
+                    log.error(
+                        "Deleting authorpath for book %s failed: %s", localbook.id, ex
+                    )
         # change location in database to new author/title path
-        localbook.path = os.path.join(new_author_dir, new_titledir).replace('\\', '/')
+        localbook.path = os.path.join(new_author_dir, new_titledir).replace("\\", "/")
     except OSError as ex:
-        log.error_or_exception("Rename title from {} to {} failed with error: {}".format(path, new_path, ex))
-        return _("Rename title from: '%(src)s' to '%(dest)s' failed with error: %(error)s",
-                 src=path, dest=new_path, error=str(ex))
+        log.error_or_exception(
+            "Rename title from {} to {} failed with error: {}".format(
+                path, new_path, ex
+            )
+        )
+        return _(
+            "Rename title from: '%(src)s' to '%(dest)s' failed with error: %(error)s",
+            src=path,
+            dest=new_path,
+            error=str(ex),
+        )
     return False
 
 
-def rename_files_on_change(first_author,
-                           renamed_author,
-                           local_book,
-                           original_filepath="",
-                           path="",
-                           calibre_path="",
-                           gdrive=False):
+def rename_files_on_change(
+    first_author,
+    renamed_author,
+    local_book,
+    original_filepath="",
+    path="",
+    calibre_path="",
+    gdrive=False,
+):
     # Rename all files from old names to new names
-    #try:
-        #clean_author_database(renamed_author, calibre_path, gdrive=gdrive)
-        #if first_author and first_author not in renamed_author:
-        #    clean_author_database([first_author], calibre_path, local_book, gdrive)
-        #if not gdrive and not renamed_author and not original_filepath and len(os.listdir(os.path.dirname(path))) == 0:
-        #    shutil.rmtree(os.path.dirname(path))
-    #except (OSError, FileNotFoundError) as ex:
+    # try:
+    # clean_author_database(renamed_author, calibre_path, gdrive=gdrive)
+    # if first_author and first_author not in renamed_author:
+    #    clean_author_database([first_author], calibre_path, local_book, gdrive)
+    # if not gdrive and not renamed_author and not original_filepath and len(os.listdir(os.path.dirname(path))) == 0:
+    #    shutil.rmtree(os.path.dirname(path))
+    # except (OSError, FileNotFoundError) as ex:
     #    log.error_or_exception("Error in rename file in path {}".format(ex))
     #    return _("Error in rename file in path: {}".format(str(ex)))
     return False
@@ -583,18 +818,22 @@ def rename_files_on_change(first_author,
 def delete_book_gdrive(book, book_format):
     error = None
     if book_format:
-        name = ''
+        name = ""
         for entry in book.data:
             if entry.format.upper() == book_format:
-                name = entry.name + '.' + book_format
+                name = entry.name + "." + book_format
         g_file = gd.getFileFromEbooksFolder(book.path, name, nocase=True)
     else:
-        g_file = gd.getFileFromEbooksFolder(os.path.dirname(book.path), book.path.split('/')[1])
+        g_file = gd.getFileFromEbooksFolder(
+            os.path.dirname(book.path), book.path.split("/")[1]
+        )
     if g_file:
-        gd.deleteDatabaseEntry(g_file['id'])
+        gd.deleteDatabaseEntry(g_file["id"])
         g_file.Trash()
     else:
-        error = _('Book path %(path)s not found on Google Drive', path=book.path)  # file not found
+        error = _(
+            "Book path %(path)s not found on Google Drive", path=book.path
+        )  # file not found
 
     return error is None, error
 
@@ -618,7 +857,9 @@ def reset_password(user_id):
 
 def generate_random_password(min_length):
     min_length = max(8, min_length) - 4
-    random_source = "abcdefghijklmnopqrstuvwxyz01234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$%&*()?"
+    random_source = (
+        "abcdefghijklmnopqrstuvwxyz01234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$%&*()?"
+    )
     # select 1 lowercase
     s = "abcdefghijklmnopqrstuvwxyz"
     password = [s[c % len(s)] for c in os.urandom(1)]
@@ -633,12 +874,14 @@ def generate_random_password(min_length):
     password.extend([s[c % len(s)] for c in os.urandom(1)])
 
     # generate other characters
-    password.extend([random_source[c % len(random_source)] for c in os.urandom(min_length)])
+    password.extend(
+        [random_source[c % len(random_source)] for c in os.urandom(min_length)]
+    )
 
     # password_list = list(password)
     # shuffle all characters
     random.SystemRandom().shuffle(password)
-    return ''.join(password)
+    return "".join(password)
 
 
 def uniq(inpt):
@@ -652,7 +895,11 @@ def uniq(inpt):
 
 def check_email(email):
     email = valid_email(email)
-    if ub.session.query(ub.User).filter(func.lower(ub.User.email) == email.lower()).first():
+    if (
+        ub.session.query(ub.User)
+        .filter(func.lower(ub.User.email) == email.lower())
+        .first()
+    ):
         log.error("Found an existing account for this Email address")
         raise Exception(_("Found an existing account for this Email address"))
     return email
@@ -660,7 +907,11 @@ def check_email(email):
 
 def check_username(username):
     username = strip_whitespaces(username)
-    if ub.session.query(ub.User).filter(func.lower(ub.User.name) == username.lower()).scalar():
+    if (
+        ub.session.query(ub.User)
+        .filter(func.lower(ub.User.name) == username.lower())
+        .scalar()
+    ):
         log.error("This username is already taken")
         raise Exception(_("This username is already taken"))
     return username
@@ -668,13 +919,15 @@ def check_username(username):
 
 def valid_email(emails):
     valid_emails = []
-    for email in emails.split(','):
+    for email in emails.split(","):
         email = strip_whitespaces(email)
         # if email is not deleted
         if email:
             # Regex according to https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/email#validation
-            if not re.search(r"^[\w.!#$%&'*+\\/=?^_`{|}~-]+@[\w](?:[\w-]{0,61}[\w])?(?:\.[\w](?:[\w-]{0,61}[\w])?)*$",
-                             email):
+            if not re.search(
+                r"^[\w.!#$%&'*+\\/=?^_`{|}~-]+@[\w](?:[\w-]{0,61}[\w])?(?:\.[\w](?:[\w-]{0,61}[\w])?)*$",
+                email,
+            ):
                 log.error("Invalid Email address format for {}".format(email))
                 raise Exception(_("Invalid Email address format"))
             valid_emails.append(email)
@@ -700,22 +953,24 @@ def valid_password(check_password):
         if not match:
             raise Exception(_("Password doesn't comply with password validation rules"))
     return check_password
+
+
 # ################################# External interface #################################
 
 
-def update_dir_structure(book_id,
-                         calibre_path,
-                         first_author=None,     # change author of book to this author
-                         original_filepath=None,
-                         db_filename=None):
+def update_dir_structure(
+    book_id,
+    calibre_path,
+    first_author=None,  # change author of book to this author
+    original_filepath=None,
+    db_filename=None,
+):
     if config.config_use_google_drive:
         return update_dir_structure_gdrive(book_id, first_author)
     else:
-        return update_dir_structure_file(book_id,
-                                         calibre_path,
-                                         original_filepath,
-                                         first_author,
-                                         db_filename)
+        return update_dir_structure_file(
+            book_id, calibre_path, original_filepath, first_author, db_filename
+        )
 
 
 def delete_book(book, calibrepath, book_format):
@@ -747,6 +1002,7 @@ def get_book_cover_with_uuid(book_uuid, resolution=None):
         return  # allows kobo.HandleCoverImageRequest to proxy request
     return get_book_cover_internal(book, resolution=resolution)
 
+
 def get_book_cover_epoch_date_with_uuid(book_uuid):
     book = calibre_db.get_book_by_uuid(book_uuid)
     if book and book.has_cover:
@@ -756,38 +1012,62 @@ def get_book_cover_epoch_date_with_uuid(book_uuid):
             return str(ts)
     return None
 
+
 def get_book_cover_internal(book, resolution=None):
     if book and book.has_cover:
-
         # Send the book cover thumbnail if it exists in cache
         if resolution:
-            thumbnail = get_book_cover_thumbnail(book, resolution)
-            if thumbnail:
-                cache = fs.FileSystem()
-                if cache.get_cache_file_exists(thumbnail.filename, CACHE_TYPE_THUMBNAILS):
-                    return send_from_directory(cache.get_cache_file_dir(thumbnail.filename, CACHE_TYPE_THUMBNAILS), thumbnail.filename)
+            # Kobo devices expect JPEG covers; serving WebP thumbnails can cause the device
+            # to stall on "Downloading book covers".
+            preferred_formats = ["webp", "jpg"]
+            try:
+                from flask import has_request_context, request
 
-            #cache = fs.FileSystem()
+                if (
+                    has_request_context()
+                    and getattr(request, "path", None)
+                    and "/kobo/" in request.path
+                ):
+                    preferred_formats = ["jpg", "webp"]
+            except Exception:
+                pass
+
+            thumbnail = None
+            for fmt in preferred_formats:
+                thumbnail = get_book_cover_thumbnail_by_format(book, resolution, fmt)
+                if thumbnail:
+                    cache = fs.FileSystem()
+                    if cache.get_cache_file_exists(
+                        thumbnail.filename, CACHE_TYPE_THUMBNAILS
+                    ):
+                        return send_from_directory(
+                            cache.get_cache_file_dir(
+                                thumbnail.filename, CACHE_TYPE_THUMBNAILS
+                            ),
+                            thumbnail.filename,
+                        )
+
+            # cache = fs.FileSystem()
             ## Check for both webp and jpg thumbnails, generate missing ones
-            #webp_thumb = get_book_cover_thumbnail_by_format(book, resolution, 'webp')
-            #jpg_thumb = get_book_cover_thumbnail_by_format(book, resolution, 'jpg')
+            # webp_thumb = get_book_cover_thumbnail_by_format(book, resolution, 'webp')
+            # jpg_thumb = get_book_cover_thumbnail_by_format(book, resolution, 'jpg')
             #
             ## Check if files actually exist on disk
-            #webp_exists = webp_thumb and cache.get_cache_file_exists(webp_thumb.filename, CACHE_TYPE_THUMBNAILS)
-            #jpg_exists = jpg_thumb and cache.get_cache_file_exists(jpg_thumb.filename, CACHE_TYPE_THUMBNAILS)
+            # webp_exists = webp_thumb and cache.get_cache_file_exists(webp_thumb.filename, CACHE_TYPE_THUMBNAILS)
+            # jpg_exists = jpg_thumb and cache.get_cache_file_exists(jpg_thumb.filename, CACHE_TYPE_THUMBNAILS)
             #
             ## Generate missing thumbnails on-demand (skip for Kobo requests to avoid delays)
-            #if not webp_exists or not jpg_exists:
+            # if not webp_exists or not jpg_exists:
             #    try:
             #        from flask import has_request_context, request
             #        is_kobo_request = (has_request_context() and request.path and '/kobo/' in request.path)
-            #        
+            #
             #        if not is_kobo_request and use_IM:
             #            from .tasks.thumbnail import TaskGenerateCoverThumbnails
             #            # Create and run thumbnail generation for this book
             #            thumbnail_task = TaskGenerateCoverThumbnails(book_id=book.id)
             #            thumbnail_task.create_book_cover_thumbnails(book)
-            #            
+            #
             #            # Refresh thumbnail references after generation
             #            webp_thumb = get_book_cover_thumbnail_by_format(book, resolution, 'webp')
             #            jpg_thumb = get_book_cover_thumbnail_by_format(book, resolution, 'jpg')
@@ -797,19 +1077,19 @@ def get_book_cover_internal(book, resolution=None):
             #        log.debug(f'Failed to generate thumbnail on-demand for book {book.id}: {ex}')
             #
             ## Determine which thumbnail format to serve based on request context
-            #try:
+            # try:
             #    from flask import has_request_context, request
             #    is_kobo_request = (has_request_context() and request.path and '/kobo/' in request.path)
-            #    
+            #
             #    # Prefer jpg for Kobo requests, webp for web requests
             #    if is_kobo_request:
             #        thumbnail_to_serve = jpg_thumb if jpg_exists else (webp_thumb if webp_exists else None)
             #    else:
             #        thumbnail_to_serve = webp_thumb if webp_exists else (jpg_thumb if jpg_exists else None)
-            #except:
+            # except:
             #    # Fallback if we can't determine request context
             #    thumbnail_to_serve = webp_thumb if webp_exists else (jpg_thumb if jpg_exists else None)
-            #if thumbnail_to_serve:
+            # if thumbnail_to_serve:
             #    return send_from_directory(cache.get_cache_file_dir(thumbnail_to_serve.filename, CACHE_TYPE_THUMBNAILS), thumbnail_to_serve.filename)
 
         # Send the book cover from Google Drive if configured
@@ -819,9 +1099,11 @@ def get_book_cover_internal(book, resolution=None):
                     return get_cover_on_failure()
                 cover_file = gd.get_cover_via_gdrive(book.path)
                 if cover_file:
-                    return Response(cover_file, mimetype='image/jpeg')
+                    return Response(cover_file, mimetype="image/jpeg")
                 else:
-                    log.error('{}/cover.jpg not found on Google Drive'.format(book.path))
+                    log.error(
+                        "{}/cover.jpg not found on Google Drive".format(book.path)
+                    )
                     return get_cover_on_failure()
             except Exception as ex:
                 log.error_or_exception(ex)
@@ -840,16 +1122,66 @@ def get_book_cover_internal(book, resolution=None):
 
 def get_book_cover_thumbnail(book, resolution):
     if book and book.has_cover:
-        return (ub.session
-                .query(ub.Thumbnail)
-                .filter(ub.Thumbnail.type == THUMBNAIL_TYPE_COVER)
-                .filter(ub.Thumbnail.entity_id == book.id)
-                .filter(ub.Thumbnail.resolution == resolution)
-                .filter(or_(ub.Thumbnail.expiration.is_(None), ub.Thumbnail.expiration > datetime.now(timezone.utc)))
-                .first())
-    
+        return (
+            ub.session.query(ub.Thumbnail)
+            .filter(ub.Thumbnail.type == THUMBNAIL_TYPE_COVER)
+            .filter(ub.Thumbnail.entity_id == book.id)
+            .filter(ub.Thumbnail.resolution == resolution)
+            .filter(
+                or_(
+                    ub.Thumbnail.expiration.is_(None),
+                    ub.Thumbnail.expiration > datetime.now(timezone.utc),
+                )
+            )
+            .order_by(ub.Thumbnail.generated_at.desc(), ub.Thumbnail.id.desc())
+            .first()
+        )
 
-#def get_book_cover_thumbnail_by_format(book, resolution, format):
+
+def get_book_cover_thumbnail_by_format(book, resolution, fmt):
+    """Gets the thumbnail for a specific book, resolution and format (webp/jpg)."""
+    if book and book.has_cover:
+        fmt_l = str(fmt).lower()
+
+        # Fast path: generated thumbnails store lowercase formats (e.g. 'jpg', 'webp').
+        thumb = (
+            ub.session.query(ub.Thumbnail)
+            .filter(ub.Thumbnail.type == THUMBNAIL_TYPE_COVER)
+            .filter(ub.Thumbnail.entity_id == book.id)
+            .filter(ub.Thumbnail.resolution == resolution)
+            .filter(ub.Thumbnail.format == fmt_l)
+            .filter(
+                or_(
+                    ub.Thumbnail.expiration.is_(None),
+                    ub.Thumbnail.expiration > datetime.now(timezone.utc),
+                )
+            )
+            .order_by(ub.Thumbnail.generated_at.desc(), ub.Thumbnail.id.desc())
+            .first()
+        )
+
+        if thumb:
+            return thumb
+
+        # Fallback: handle legacy mixed-case format values.
+        return (
+            ub.session.query(ub.Thumbnail)
+            .filter(ub.Thumbnail.type == THUMBNAIL_TYPE_COVER)
+            .filter(ub.Thumbnail.entity_id == book.id)
+            .filter(ub.Thumbnail.resolution == resolution)
+            .filter(func.lower(ub.Thumbnail.format) == fmt_l)
+            .filter(
+                or_(
+                    ub.Thumbnail.expiration.is_(None),
+                    ub.Thumbnail.expiration > datetime.now(timezone.utc),
+                )
+            )
+            .order_by(ub.Thumbnail.generated_at.desc(), ub.Thumbnail.id.desc())
+            .first()
+        )
+
+
+# def get_book_cover_thumbnail_by_format(book, resolution, format):
 #    """Gets the thumbnail for a specific book, resolution and format (webp/jpg)."""
 #
 #    if book and book.has_cover:
@@ -864,13 +1196,14 @@ def get_book_cover_thumbnail(book, resolution):
 
 
 def get_series_thumbnail_on_failure(series_id, resolution):
-    book = (calibre_db.session
-        .query(db.Books)
+    book = (
+        calibre_db.session.query(db.Books)
         .join(db.books_series_link)
         .join(db.Series)
         .filter(db.Series.id == series_id)
         .filter(db.Books.has_cover == 1)
-        .first())
+        .first()
+    )
     return get_book_cover_internal(book, resolution=resolution)
 
 
@@ -885,48 +1218,67 @@ def get_series_cover_internal(series_id, resolution=None):
         if thumbnail:
             cache = fs.FileSystem()
             if cache.get_cache_file_exists(thumbnail.filename, CACHE_TYPE_THUMBNAILS):
-                return send_from_directory(cache.get_cache_file_dir(thumbnail.filename, CACHE_TYPE_THUMBNAILS),
-                                           thumbnail.filename)
+                return send_from_directory(
+                    cache.get_cache_file_dir(thumbnail.filename, CACHE_TYPE_THUMBNAILS),
+                    thumbnail.filename,
+                )
 
     return get_series_thumbnail_on_failure(series_id, resolution)
 
 
 def get_series_thumbnail(series_id, resolution):
-    return (ub.session
-        .query(ub.Thumbnail)
+    return (
+        ub.session.query(ub.Thumbnail)
         .filter(ub.Thumbnail.type == THUMBNAIL_TYPE_SERIES)
         .filter(ub.Thumbnail.entity_id == series_id)
         .filter(ub.Thumbnail.resolution == resolution)
-        .filter(or_(ub.Thumbnail.expiration.is_(None), ub.Thumbnail.expiration > datetime.now(timezone.utc)))
-        .first())
+        .filter(
+            or_(
+                ub.Thumbnail.expiration.is_(None),
+                ub.Thumbnail.expiration > datetime.now(timezone.utc),
+            )
+        )
+        .order_by(ub.Thumbnail.generated_at.desc(), ub.Thumbnail.id.desc())
+        .first()
+    )
 
 
 # saves book cover from url
 def save_cover_from_url(url, book_path):
     try:
         if cli_param.allow_localhost:
-            img = requests.get(url, timeout=(10, 200), allow_redirects=False)  # ToDo: Error Handling
+            img = requests.get(
+                url, timeout=(10, 200), allow_redirects=False
+            )  # ToDo: Error Handling
         elif use_advocate:
-            img = cw_advocate.get(url, timeout=(10, 200), allow_redirects=False)      # ToDo: Error Handling
+            img = cw_advocate.get(
+                url, timeout=(10, 200), allow_redirects=False
+            )  # ToDo: Error Handling
         else:
             log.error("python module advocate is not installed but is needed")
-            return False, _("Python module 'advocate' is not installed but is needed for cover uploads")
+            return False, _(
+                "Python module 'advocate' is not installed but is needed for cover uploads"
+            )
         img.raise_for_status()
         return save_cover(img, book_path)
-    except (socket.gaierror,
-            requests.exceptions.HTTPError,
-            requests.exceptions.InvalidURL,
-            requests.exceptions.ConnectionError,
-            requests.exceptions.Timeout) as ex:
+    except (
+        socket.gaierror,
+        requests.exceptions.HTTPError,
+        requests.exceptions.InvalidURL,
+        requests.exceptions.ConnectionError,
+        requests.exceptions.Timeout,
+    ) as ex:
         # "Invalid host" can be the result of a redirect response
-        log.error(u'Cover Download Error %s', ex)
+        log.error("Cover Download Error %s", ex)
         return False, _("Error Downloading Cover")
     except MissingDelegateError as ex:
-        log.info(u'File Format Error %s', ex)
+        log.info("File Format Error %s", ex)
         return False, _("Cover Format Error")
     except UnacceptableAddressException as e:
         log.error("Localhost or local network was accessed for cover upload")
-        return False, _("You are not allowed to access localhost or the local network for cover uploads")
+        return False, _(
+            "You are not allowed to access localhost or the local network for cover uploads"
+        )
 
 
 def save_cover_from_filestorage(filepath, saved_filename, img):
@@ -940,7 +1292,7 @@ def save_cover_from_filestorage(filepath, saved_filename, img):
     try:
         # upload of jpg file without wand
         if isinstance(img, requests.Response):
-            with open(os.path.join(filepath, saved_filename), 'wb') as f:
+            with open(os.path.join(filepath, saved_filename), "wb") as f:
                 f.write(img.content)
         else:
             if hasattr(img, "metadata"):
@@ -958,29 +1310,37 @@ def save_cover_from_filestorage(filepath, saved_filename, img):
 
 # saves book cover to gdrive or locally
 def save_cover(img, book_path):
-    content_type = img.headers.get('content-type')
-    # Clean content-type by removing charset and other parameters  
-    if content_type:  
-        content_type = content_type.split(';')[0].strip()  
+    content_type = img.headers.get("content-type")
+    # Clean content-type by removing charset and other parameters
+    if content_type:
+        content_type = content_type.split(";")[0].strip()
 
     if use_IM:
-        if content_type not in ('image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/bmp'):
+        if content_type not in (
+            "image/jpeg",
+            "image/jpg",
+            "image/png",
+            "image/webp",
+            "image/bmp",
+        ):
             log.error("Only jpg/jpeg/png/webp/bmp files are supported as coverfile")
-            return False, _("Only jpg/jpeg/png/webp/bmp files are supported as coverfile")
+            return False, _(
+                "Only jpg/jpeg/png/webp/bmp files are supported as coverfile"
+            )
         # convert to jpg because calibre only supports jpg
         try:
-            if hasattr(img, 'stream'):
+            if hasattr(img, "stream"):
                 imgc = Image(blob=img.stream)
             else:
                 imgc = Image(blob=io.BytesIO(img.content))
-            imgc.format = 'jpeg'
+            imgc.format = "jpeg"
             imgc.transform_colorspace("srgb")
             img = imgc
         except (BlobError, MissingDelegateError):
             log.error("Invalid cover file content")
             return False, _("Invalid cover file content")
     else:
-        if content_type not in ['image/jpeg', 'image/jpg']:
+        if content_type not in ["image/jpeg", "image/jpg"]:
             log.error("Only jpg/jpeg files are supported as coverfile")
             return False, _("Only jpg/jpeg files are supported as coverfile")
 
@@ -988,14 +1348,18 @@ def save_cover(img, book_path):
         tmp_dir = get_temp_dir()
         ret, message = save_cover_from_filestorage(tmp_dir, "uploaded_cover.jpg", img)
         if ret is True:
-            gd.uploadFileToEbooksFolder(os.path.join(book_path, 'cover.jpg').replace("\\", "/"),
-                                        os.path.join(tmp_dir, "uploaded_cover.jpg"))
+            gd.uploadFileToEbooksFolder(
+                os.path.join(book_path, "cover.jpg").replace("\\", "/"),
+                os.path.join(tmp_dir, "uploaded_cover.jpg"),
+            )
             log.info("Cover is saved on Google Drive")
             return True, None
         else:
             return False, message
     else:
-        return save_cover_from_filestorage(os.path.join(config.get_book_path(), book_path), "cover.jpg", img)
+        return save_cover_from_filestorage(
+            os.path.join(config.get_book_path(), book_path), "cover.jpg", img
+        )
 
 
 def do_download_file(book, book_format, client, data, headers):
@@ -1009,12 +1373,15 @@ def do_download_file(book, book_format, client, data, headers):
         # log.debug('%s', time.time() - startTime)
         if df:
             if config.config_embed_metadata and (
-                 (book_format == "kepub" and config.config_kepubifypath) or
-                 (book_format != "kepub" and config.config_binariesdir)):
+                (book_format == "kepub" and config.config_kepubifypath)
+                or (book_format != "kepub" and config.config_binariesdir)
+            ):
                 output_path = os.path.join(config.config_calibre_dir, book.path)
                 if not os.path.exists(output_path):
                     os.makedirs(output_path)
-                output = os.path.join(config.config_calibre_dir, book.path, book_name + "." + book_format)
+                output = os.path.join(
+                    config.config_calibre_dir, book.path, book_name + "." + book_format
+                )
                 gd.downloadFile(book.path, book_name + "." + book_format, output)
                 if book_format == "kepub" and config.config_kepubifypath:
                     filename, download_name = do_kepubify_metadata_replace(book, output)
@@ -1030,16 +1397,30 @@ def do_download_file(book, book_format, client, data, headers):
         filename = os.path.join(config.get_book_path(), book.path)
         if not os.path.isfile(os.path.join(filename, book_name + "." + book_format)):
             # ToDo: improve error handling
-            log.error('File not found: %s', os.path.join(filename, book_name + "." + book_format))
+            log.error(
+                "File not found: %s",
+                os.path.join(filename, book_name + "." + book_format),
+            )
 
         if client == "kobo" and book_format == "kepub":
-            headers["Content-Disposition"] = headers["Content-Disposition"].replace(".kepub", ".kepub.epub")
+            headers["Content-Disposition"] = headers["Content-Disposition"].replace(
+                ".kepub", ".kepub.epub"
+            )
 
-        if book_format == "kepub" and config.config_kepubifypath and config.config_embed_metadata:
-            filename, download_name = do_kepubify_metadata_replace(book, os.path.join(filename,
-                                                                                      book_name + "." + book_format))
+        if (
+            book_format == "kepub"
+            and config.config_kepubifypath
+            and config.config_embed_metadata
+        ):
+            filename, download_name = do_kepubify_metadata_replace(
+                book, os.path.join(filename, book_name + "." + book_format)
+            )
             metadata_embedded = True
-        elif book_format != "kepub" and config.config_binariesdir and config.config_embed_metadata:
+        elif (
+            book_format != "kepub"
+            and config.config_binariesdir
+            and config.config_embed_metadata
+        ):
             filename, download_name = do_calibre_export(book.id, book_format)
             metadata_embedded = True
 
@@ -1051,40 +1432,55 @@ def do_download_file(book, book_format, client, data, headers):
                     try:
                         if os.path.exists(expected_file):
                             os.remove(expected_file)
-                        
+
                         os.rename(uuid_file, expected_file)
                         download_name = book_name
-                        log.info(f"Renamed exported file to match expected name: {book_name}.{book_format}")
+                        log.info(
+                            f"Renamed exported file to match expected name: {book_name}.{book_format}"
+                        )
                     except Exception as e:
                         log.error(f"Failed to rename exported file: {e}")
         else:
             download_name = book_name
 
-    response = make_response(send_from_directory(filename, download_name + "." + book_format))
+    response = make_response(
+        send_from_directory(filename, download_name + "." + book_format)
+    )
     # ToDo Check headers parameter
     for element in headers:
         response.headers[element[0]] = element[1]
 
-    log.info('Downloading file: \'%s\' by %s - %s', format(os.path.join(filename, book_name + "." + book_format)),
-             current_user.name, request.headers.get('X-Forwarded-For', request.remote_addr))
-    
+    log.info(
+        "Downloading file: '%s' by %s - %s",
+        format(os.path.join(filename, book_name + "." + book_format)),
+        current_user.name,
+        request.headers.get("X-Forwarded-For", request.remote_addr),
+    )
+
     @after_this_request
     def _cleanup_temp_export(res):
         try:
             use_x_sendfile = current_app.config.get("USE_X_SENDFILE", False)
             if use_x_sendfile:
-                current_app.logger.debug("X-Sendfile is enabled, skipping cleanup of temp export")
+                current_app.logger.debug(
+                    "X-Sendfile is enabled, skipping cleanup of temp export"
+                )
                 return res
-            
+
             real_filename_dir = os.path.realpath(filename)
             tmpdir = get_temp_dir()
 
             if not isinstance(real_filename_dir, str):
                 return res
-            
-            if real_filename_dir.startswith(os.path.realpath(tmpdir) + os.sep):
+
+            if (
+                real_filename_dir.startswith(tmpdir + os.sep)
+                or "calibre_web" in real_filename_dir
+            ):
                 try:
-                    target = os.path.join(real_filename_dir, download_name + "." + book_format)
+                    target = os.path.join(
+                        real_filename_dir, download_name + "." + book_format
+                    )
                     if os.path.exists(target):
                         os.remove(target)
                         current_app.logger.debug("Removed temp export file: %s", target)
@@ -1094,23 +1490,29 @@ def do_download_file(book, book_format, client, data, headers):
             current_app.logger.exception("Failed to cleanup temp export: %s", e)
         return res
 
-
     return response
 
 
 def do_kepubify_metadata_replace(book, file_path):
-    custom_columns = (calibre_db.session.query(db.CustomColumns)
-                      .filter(db.CustomColumns.mark_for_delete == 0)
-                      .filter(db.CustomColumns.datatype.notin_(db.cc_exceptions))
-                      .order_by(db.CustomColumns.label).all())
+    custom_columns = (
+        calibre_db.session.query(db.CustomColumns)
+        .filter(db.CustomColumns.mark_for_delete == 0)
+        .filter(db.CustomColumns.datatype.notin_(db.cc_exceptions))
+        .order_by(db.CustomColumns.label)
+        .all()
+    )
 
     tree, cf_name = get_content_opf(file_path)
-    package = create_new_metadata_backup(book, custom_columns, current_user.locale, _("Cover"), lang_type=2)
+    package = create_new_metadata_backup(
+        book, custom_columns, current_user.locale, _("Cover"), lang_type=2
+    )
     content = replace_metadata(tree, package)
     tmp_dir = get_temp_dir()
     temp_file_name = str(uuid4())
     # open zipfile and replace metadata block in content.opf
-    updateEpub(file_path, os.path.join(tmp_dir, temp_file_name + ".kepub"), cf_name, content)
+    updateEpub(
+        file_path, os.path.join(tmp_dir, temp_file_name + ".kepub"), cf_name, content
+    )
     return tmp_dir, temp_file_name
 
 
@@ -1122,18 +1524,18 @@ def check_unrar(unrar_location):
         return
 
     if not os.path.exists(unrar_location):
-        return _('UnRar binary file not found')
+        return _("UnRar binary file not found")
 
     try:
         unrar_location = [unrar_location]
-        value = process_wait(unrar_location, pattern='UNRAR (.*) freeware')
+        value = process_wait(unrar_location, pattern="UNRAR (.*) freeware")
         if value:
             version = value.group(1)
             log.debug("UnRar version %s", version)
 
     except (OSError, UnicodeDecodeError) as err:
         log.error_or_exception(err)
-        return _('Error executing UnRar')
+        return _("Error executing UnRar")
 
 
 def check_calibre(calibre_location):
@@ -1141,40 +1543,68 @@ def check_calibre(calibre_location):
         return
 
     if not os.path.exists(calibre_location):
-        return _('Could not find the specified directory')
+        return _("Could not find the specified directory")
 
     if not os.path.isdir(calibre_location):
-        return _('Please specify a directory, not a file')
+        return _("Please specify a directory, not a file")
 
     try:
-        supported_binary_paths = [os.path.join(calibre_location, binary)
-                                  for binary in SUPPORTED_CALIBRE_BINARIES.values()]
-        binaries_available = [os.path.isfile(binary_path) for binary_path in supported_binary_paths]
-        binaries_executable = [os.access(binary_path, os.X_OK) for binary_path in supported_binary_paths]
+        supported_binary_paths = [
+            os.path.join(calibre_location, binary)
+            for binary in SUPPORTED_CALIBRE_BINARIES.values()
+        ]
+        binaries_available = [
+            os.path.isfile(binary_path) for binary_path in supported_binary_paths
+        ]
+        binaries_executable = [
+            os.access(binary_path, os.X_OK) for binary_path in supported_binary_paths
+        ]
         if all(binaries_available) and all(binaries_executable):
-            values = [process_wait([binary_path, "--version"], pattern=r'\(calibre (.*)\)')
-                      for binary_path in supported_binary_paths]
+            values = [
+                process_wait([binary_path, "--version"], pattern=r"\(calibre (.*)\)")
+                for binary_path in supported_binary_paths
+            ]
             if all(values):
                 version = values[0].group(1)
                 log.debug("calibre version %s", version)
             else:
-                return _('Calibre binaries not viable')
+                return _("Calibre binaries not viable")
         else:
             ret_val = []
-            missing_binaries = [path for path, available in
-                               zip(SUPPORTED_CALIBRE_BINARIES.values(), binaries_available) if not available]
+            missing_binaries = [
+                path
+                for path, available in zip(
+                    SUPPORTED_CALIBRE_BINARIES.values(), binaries_available
+                )
+                if not available
+            ]
 
-            missing_perms = [path for path, available in
-                            zip(SUPPORTED_CALIBRE_BINARIES.values(), binaries_executable) if not available]
+            missing_perms = [
+                path
+                for path, available in zip(
+                    SUPPORTED_CALIBRE_BINARIES.values(), binaries_executable
+                )
+                if not available
+            ]
             if missing_binaries:
-                ret_val.append(_('Missing calibre binaries: %(missing)s', missing=", ".join(missing_binaries)))
+                ret_val.append(
+                    _(
+                        "Missing calibre binaries: %(missing)s",
+                        missing=", ".join(missing_binaries),
+                    )
+                )
             if missing_perms:
-                ret_val.append(_('Missing executable permissions: %(missing)s', missing=", ".join(missing_perms)))
+                ret_val.append(
+                    _(
+                        "Missing executable permissions: %(missing)s",
+                        missing=", ".join(missing_perms),
+                    )
+                )
             return ", ".join(ret_val)
 
     except (OSError, UnicodeDecodeError) as err:
         log.error_or_exception(err)
-        return _('Error executing Calibre')
+        return _("Error executing Calibre")
 
 
 def json_serial(obj):
@@ -1184,10 +1614,10 @@ def json_serial(obj):
         return obj.isoformat()
     if isinstance(obj, timedelta):
         return {
-            '__type__': 'timedelta',
-            'days': obj.days,
-            'seconds': obj.seconds,
-            'microseconds': obj.microseconds,
+            "__type__": "timedelta",
+            "days": obj.days,
+            "seconds": obj.seconds,
+            "microseconds": obj.microseconds,
         }
     raise TypeError("Type %s not serializable" % type(obj))
 
@@ -1195,8 +1625,12 @@ def json_serial(obj):
 def tags_filters():
     negtags_list = current_user.list_denied_tags()
     postags_list = current_user.list_allowed_tags()
-    neg_content_tags_filter = false() if negtags_list == [''] else db.Tags.name.in_(negtags_list)
-    pos_content_tags_filter = true() if postags_list == [''] else db.Tags.name.in_(postags_list)
+    neg_content_tags_filter = (
+        false() if negtags_list == [""] else db.Tags.name.in_(negtags_list)
+    )
+    pos_content_tags_filter = (
+        true() if postags_list == [""] else db.Tags.name.in_(postags_list)
+    )
     return and_(pos_content_tags_filter, ~neg_content_tags_filter)
 
 
@@ -1206,10 +1640,20 @@ def tags_filters():
 # in all calls the email address is checked for validity
 def check_valid_domain(domain_text):
     sql = "SELECT * FROM registration WHERE (:domain LIKE domain and allow = 1);"
-    if not len(ub.session.query(ub.Registration).from_statement(text(sql)).params(domain=domain_text).all()):
+    if not len(
+        ub.session.query(ub.Registration)
+        .from_statement(text(sql))
+        .params(domain=domain_text)
+        .all()
+    ):
         return False
     sql = "SELECT * FROM registration WHERE (:domain LIKE domain and allow = 0);"
-    return not len(ub.session.query(ub.Registration).from_statement(text(sql)).params(domain=domain_text).all())
+    return not len(
+        ub.session.query(ub.Registration)
+        .from_statement(text(sql))
+        .params(domain=domain_text)
+        .all()
+    )
 
 
 def get_download_link(book_id, book_format, client):
@@ -1217,21 +1661,152 @@ def get_download_link(book_id, book_format, client):
     book = calibre_db.get_filtered_book(book_id, allow_show_archived=True)
     if book:
         data1 = calibre_db.get_book_format(book.id, book_format.upper())
+
+        # Kobo-specific compatibility: generate and/or serve KEPUBs for Kobo downloads even when
+        # the Calibre DB (metadata.db) is mounted read-only and cannot be updated with a
+        # corresponding `data` row.
+        #
+        # Behavior:
+        # - If a KEPUB exists on disk, serve it.
+        # - If no KEPUB exists, but an EPUB exists and kepubify is configured, generate a
+        #   temporary KEPUB in the temp directory and serve that (no DB write required).
+        #
+        # This only applies to local filesystem libraries (not Google Drive) and only for KEPUB requests
+        # from Kobo clients.
+        if (
+            (not data1)
+            and client == "kobo"
+            and book_format.lower() == "kepub"
+            and (not config.config_use_google_drive)
+        ):
+            try:
+                candidate_dir = os.path.join(config.get_book_path(), book.path)
+
+                # Derive the Calibre filename prefix from an existing format entry (prefer EPUB).
+                base_name = None
+                try:
+                    for d in getattr(book, "data", None) or []:
+                        if getattr(d, "format", None) == "EPUB":
+                            base_name = getattr(d, "name", None)
+                            break
+                    if (
+                        not base_name
+                        and getattr(book, "data", None)
+                        and len(book.data) > 0
+                    ):
+                        base_name = getattr(book.data[0], "name", None)
+                except Exception:
+                    base_name = None
+
+                # Helper to synthesize a minimal "data-like" object for downstream code.
+                def _make_data_like(name, size):
+                    dummy = type("DataLike", (), {})()
+                    dummy.name = name
+                    dummy.uncompressed_size = size
+                    return dummy
+
+                # 1) Serve an on-disk KEPUB if present (common if previously generated).
+                if base_name:
+                    kepub_path = os.path.join(candidate_dir, base_name + ".kepub")
+                    if os.path.isfile(kepub_path):
+                        data1 = _make_data_like(base_name, os.path.getsize(kepub_path))
+
+                # 2) Otherwise, generate a temporary KEPUB from EPUB on-demand for this download.
+                if (not data1) and base_name and config.config_kepubifypath:
+                    epub_path = os.path.join(candidate_dir, base_name + ".epub")
+                    if os.path.isfile(epub_path):
+                        tmp_dir = get_temp_dir()
+                        temp_file_name = str(uuid4())
+                        temp_epub = os.path.join(tmp_dir, temp_file_name + ".epub")
+
+                        # Copy the source EPUB into temp (avoid writing into the library dir).
+                        copyfile(epub_path, temp_epub)
+
+                        # Ensure we have metadata replacement (embeds current metadata into the generated KEPUB).
+                        if config.config_embed_metadata:
+                            try:
+                                temp_kepub_dir, temp_kepub_name = (
+                                    do_kepubify_metadata_replace(book, temp_epub)
+                                )
+                                data1 = _make_data_like(
+                                    temp_kepub_name,
+                                    os.path.getsize(
+                                        os.path.join(
+                                            temp_kepub_dir, temp_kepub_name + ".kepub"
+                                        )
+                                    ),
+                                )
+                            except Exception as e:
+                                log.error(
+                                    "Kobo KEPUB on-demand generation failed (metadata replace): %s",
+                                    e,
+                                )
+                                data1 = None
+                        else:
+                            # Raw kepubify without embedding metadata.
+                            quotes = [1, 3]
+                            command = [
+                                config.config_kepubifypath,
+                                temp_epub,
+                                "-o",
+                                tmp_dir,
+                                "-i",
+                            ]
+                            try:
+                                p = process_open(command, quotes)
+                                while True:
+                                    _ = p.stdout.readlines()
+                                    if p.poll() is not None:
+                                        break
+                                if p.returncode == 0:
+                                    converted_file = glob.glob(
+                                        glob.escape(os.path.splitext(temp_epub)[0])
+                                        + "*.kepub.epub"
+                                    )
+                                    if len(converted_file) == 1:
+                                        # Normalize to a .kepub filename for the rest of the download pipeline.
+                                        temp_kepub = os.path.join(
+                                            tmp_dir, temp_file_name + ".kepub"
+                                        )
+                                        copyfile(converted_file[0], temp_kepub)
+                                        os.unlink(converted_file[0])
+                                        data1 = _make_data_like(
+                                            temp_file_name, os.path.getsize(temp_kepub)
+                                        )
+                                else:
+                                    log.error(
+                                        "Kobo KEPUB on-demand kepubify failed: rc=%s",
+                                        p.returncode,
+                                    )
+                                    data1 = None
+                            except Exception as e:
+                                log.error("Kobo KEPUB on-demand kepubify failed: %s", e)
+                                data1 = None
+            except Exception:
+                data1 = None
+
         if data1:
             # collect downloaded books only for registered user and not for anonymous user
             if current_user.is_authenticated:
                 ub.update_download(book_id, int(current_user.id))
             file_name = book.title
             if len(book.authors) > 0:
-                file_name = file_name + ' - ' + book.authors[0].name
+                file_name = file_name + " - " + book.authors[0].name
             if client == "kindle":
-                file_name = get_valid_filename(file_name, replace_whitespace=False, force_unidecode=True)
+                file_name = get_valid_filename(
+                    file_name, replace_whitespace=False, force_unidecode=True
+                )
             else:
-                file_name = quote(get_valid_filename(file_name, replace_whitespace=False))
+                file_name = quote(
+                    get_valid_filename(file_name, replace_whitespace=False)
+                )
             headers = Headers()
-            headers["Content-Type"] = mimetypes.types_map.get('.' + book_format, "application/octet-stream")
-            headers["Content-Disposition"] = ('attachment; filename="{}.{}"; filename*=UTF-8\'\'{}.{}').format(
-                file_name, book_format, file_name, book_format)
+            headers["Content-Type"] = mimetypes.types_map.get(
+                "." + book_format, "application/octet-stream"
+            )
+            headers["Content-Disposition"] = (
+                "attachment; filename=\"{}.{}\"; filename*=UTF-8''{}.{}"
+            ).format(file_name, book_format, file_name, book_format)
             return do_download_file(book, book_format, client, data1, headers)
     else:
         log.error("Book id {} not found for downloading".format(book_id))
@@ -1264,8 +1839,13 @@ def update_thumbnail_cache():
 
 
 def set_all_metadata_dirty():
-    WorkerThread.add(None, TaskBackupMetadata(export_language=get_locale(),
-                                              translated_title=_("Cover"),
-                                              set_dirty=True,
-                                              task_message=N_("Queue all books for metadata backup")),
-                     hidden=False)
+    WorkerThread.add(
+        None,
+        TaskBackupMetadata(
+            export_language=get_locale(),
+            translated_title=_("Cover"),
+            set_dirty=True,
+            task_message=N_("Queue all books for metadata backup"),
+        ),
+        hidden=False,
+    )

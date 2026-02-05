@@ -1,26 +1,7 @@
 #!/bin/bash
 
 echo "[acw-auto-zipper] Starting ACW-Auto-Zipper service..."
-echo "[acw-auto-zipper] Matching internal localtime & timezone with the one provided..."
-
-tz=$(printcontenv TZ)
-if [[ $tz == "" ]]
-then
-    echo "[acw-auto-zipper] No TZ env found. Defaulting to UTC..."
-else
-    region=$(echo $tz | awk -F '/' '{ print $1 }')
-    city=$(echo $tz | awk -F '/' '{ print $2 }')
-
-    zoneinfo_file="/usr/share/zoneinfo/$region/$city"
-    if test -f $zoneinfo_file; then
-        echo "[acw-auto-zipper] Zoneinfo for $tz found. Setting /etc/localtime and /etc/timezone to match..."
-        ln -sfn $zoneinfo_file /etc/localtime
-        echo $tz > '/etc/timezone'
-        echo "[acw-auto-zipper] Timezone & Localtime successfully set to $tz. Initiating Auto-Zipper ..."
-    else
-        echo "[acw-auto-zipper] Zoneinfo $tz not found. Using UTC as default..."
-    fi
-fi
+echo "[acw-auto-zipper] Timezone handled by init-timezone. Current: $(cat /etc/timezone 2>/dev/null || echo 'unknown')"
 
 WAKEUP="23:59" # Wake up at this time tomorrow and run a command
 
@@ -32,22 +13,25 @@ WAKEUP="23:59" # Wake up at this time tomorrow and run a command
 # This script runs in an infinite loop, waking up every night at 23:59
 while :
 do
-    SECS=$(expr `date -d "$WAKEUP" +%s` - `date -d "now" +%s`)
-    if [[ $SECS -lt 0 ]]
-    then
-        SECS=$(expr `date -d "tomorrow $WAKEUP" +%s` - `date -d "now" +%s`)
+    NOW_SECS="$(date -d "now" +%s)"
+    TARGET_SECS="$(date -d "$WAKEUP" +%s)"
+    SECS=$((TARGET_SECS - NOW_SECS))
+    if [[ $SECS -lt 0 ]]; then
+        TARGET_SECS="$(date -d "tomorrow $WAKEUP" +%s)"
+        SECS=$((TARGET_SECS - NOW_SECS))
     fi
     echo "[acw-auto-zipper] Next run in $SECS seconds."
     sleep $SECS &  # We sleep in the background to make the script interruptible via SIGTERM when running in docker
     wait $!
     python3 /app/autocaliweb/scripts/auto_zip.py
-    if [[ $? == 1 ]]
+    RC=$?
+    if [[ $RC == 1 ]]
     then
         echo "[acw-auto-zipper] Error occurred during script initialisation (see errors above)."
-    elif [[ $? == 2 ]]
+    elif [[ $RC == 2 ]]
     then
         echo "[acw-auto-zipper] Error occurred while zipping today's files (see errors above)."
-    elif [[ $? == 3 ]]
+    elif [[ $RC == 3 ]]
     then
         echo "[acw-auto-zipper] Error occurred while trying to removed the files that have been zipped (see errors above)."
     fi

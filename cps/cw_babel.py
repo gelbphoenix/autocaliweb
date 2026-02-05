@@ -21,6 +21,9 @@ def get_locale():
     preferred = list()
     if request.accept_languages:
         for x in request.accept_languages.values():
+            # Skip wildcards like "*" which can't be parsed as locales
+            if x == "*" or not x:
+                continue
             try:
                 preferred.append(str(Locale.parse(x.replace('-', '_'))))
             except (UnknownLocaleError, ValueError) as e:

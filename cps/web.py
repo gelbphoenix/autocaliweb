@@ -26,7 +26,6 @@ import copy
 import importlib
 import time
 import sqlite3
-import json
 
 from flask import Blueprint, jsonify
 from flask import request, redirect, send_from_directory, make_response, flash, abort, url_for, Response
@@ -59,6 +58,7 @@ from .cw_babel import get_available_locale
 from .usermanagement import login_required_if_no_ano
 from .kobo_sync_status import remove_synced_book
 from .render_template import render_title_template
+from .shelf import ensure_kobo_opt_in_shelf
 from .kobo_sync_status import change_archived_books
 from . import limiter
 from .services.worker import WorkerThread
@@ -100,7 +100,7 @@ _start_time = time.time()
 def add_security_headers(resp):
     default_src = ([host.strip() for host in config.config_trustedhosts.split(',') if host] +
                    ["'self'", "'unsafe-inline'", "'unsafe-eval'"])
-    
+
     csp = "default-src " + ' '.join(default_src)
     if request.endpoint == "web.read_book" and config.config_use_google_drive:
         csp +=" blob: "
@@ -873,7 +873,7 @@ def health_check():
         db_up = True
     except Exception:
         db_up = False
-    
+
     return jsonify({
         "status": "ok" if db_up else "degraded",
         "uptime": round(uptime, 2),
@@ -999,6 +999,37 @@ def list_books():
     response = make_response(js_list)
     response.headers["Content-Type"] = "application/json; charset=utf-8"
     return response
+
+
+@web.route("/ajax/listbookids")
+@user_login_required
+def list_book_ids():
+    search_param = request.args.get("search")
+    try:
+        max_results = int(request.args.get("max") or 10000)
+    except ValueError:
+        max_results = 10000
+    max_results = max(1, min(max_results, 50000))
+
+    if search_param:
+        q = calibre_db.search_query(search_param, config).with_entities(db.Books.id)
+    else:
+        q = calibre_db.session.query(db.Books.id).filter(calibre_db.common_filters(allow_show_archived=True))
+
+    try:
+        total = q.count()
+        ids = [row[0] for row in q.limit(max_results).all()]
+    except Exception as ex:
+        log.error_or_exception(ex)
+        return jsonify({"success": False, "msg": _("Oops! Database Error: %(error)s.", error=ex)}), 500
+
+    return jsonify({
+        "success": True,
+        "ids": ids,
+        "total": total,
+        "truncated": total > max_results,
+        "max": max_results,
+    }), 200
 
 
 @web.route("/ajax/table_settings", methods=['POST'])
@@ -1249,7 +1280,20 @@ def get_cover(book_id, resolution=None):
         'lg': constants.COVER_THUMBNAIL_LARGE,
     }
     cover_resolution = resolutions.get(resolution, None)
-    return get_book_cover(book_id, cover_resolution)
+    response = get_book_cover(book_id, cover_resolution)
+    try:
+        if resolution in ("sm", "md", "lg") and response is not None:
+            response = make_response(response)
+            # These URLs are already cache-busted (e.g. ?c=<timestamp>), so it is safe to
+            # cache them aggressively to avoid per-tile conditional requests.
+            cache_busted = any(k in request.args for k in ("c", "cb"))
+            if cache_busted:
+                response.headers["Cache-Control"] = "private, max-age=2592000, immutable"  # 30 days
+            else:
+                response.headers["Cache-Control"] = "private, max-age=3600"  # 1 hour
+    except Exception:
+        pass
+    return response
 
 
 @web.route("/series_cover/<int:series_id>")
@@ -1263,7 +1307,18 @@ def get_series_cover(series_id, resolution=None):
         'lg': constants.COVER_THUMBNAIL_LARGE,
     }
     cover_resolution = resolutions.get(resolution, None)
-    return get_series_cover_thumbnail(series_id, cover_resolution)
+    response = get_series_cover_thumbnail(series_id, cover_resolution)
+    try:
+        if resolution in ("sm", "md", "lg") and response is not None:
+            response = make_response(response)
+            cache_busted = any(k in request.args for k in ("c", "cb"))
+            if cache_busted:
+                response.headers["Cache-Control"] = "private, max-age=2592000, immutable"  # 30 days
+            else:
+                response.headers["Cache-Control"] = "private, max-age=3600"  # 1 hour
+    except Exception:
+        pass
+    return response
 
 
 
@@ -1491,12 +1546,12 @@ def render_login(username="", password=""):
 def login():
     if current_user is not None and current_user.is_authenticated:
         return redirect(url_for('web.index'))
-    
+
     redirect_parameter = request.args.get("noredir", default=False, type=bool)
-    
+
     if (config.config_oauth_auto_redirect and 3 in oauth_check) and not redirect_parameter:
         return redirect(url_for('generic.login'))
-    
+
     if config.config_login_type == constants.LOGIN_LDAP and not services.ldap:
         log.error(u"Cannot activate LDAP authentication")
         flash(_(u"Cannot activate LDAP authentication"), category="error")
@@ -1624,6 +1679,28 @@ def change_profile(kobo_support, hardcover_support, local_oauth_check, oauth_sta
         current_user.kobo_only_shelves_sync = int(to_save.get("kobo_only_shelves_sync") == "on") or 0
         if old_state == 0 and current_user.kobo_only_shelves_sync == 1:
             kobo_sync_status.update_on_sync_shelfs(current_user.id)
+
+        # Check if Kobo sync mode is changing - if so, force a full resync
+        old_kobo_mode = current_user.kobo_sync_collections_mode or "selected"
+        new_kobo_mode = to_save.get("kobo_sync_collections_mode", "selected")
+        if old_kobo_mode != new_kobo_mode:
+            # Delete sync records to force full resync on next device connection
+            ub.session.query(ub.KoboSyncedBooks).filter(
+                ub.KoboSyncedBooks.user_id == current_user.id
+            ).delete()
+            flash(_("Kobo sync mode changed. A full resync will occur on next device sync."), category="info")
+
+        current_user.kobo_sync_collections_mode = new_kobo_mode
+        # Create the opt-in shelf when switching to hybrid mode
+        if current_user.kobo_sync_collections_mode == "hybrid":
+            ensure_kobo_opt_in_shelf(current_user.id)
+        current_user.kobo_generated_shelves_sync = int(to_save.get("kobo_generated_shelves_sync") == "on") or 0
+        current_user.kobo_generated_shelves_all_books = int(to_save.get("kobo_generated_shelves_all_books") == "on") or 0
+        current_user.kobo_sync_empty_collections = int(to_save.get("kobo_sync_empty_collections") == "on") or 0
+        try:
+            current_user.kobo_sync_item_limit = int(to_save.get("kobo_sync_item_limit", 100) or 100)
+        except (ValueError, TypeError):
+            current_user.kobo_sync_item_limit = 100
         current_user.kobo_plus = int(to_save.get("kobo_plus") == "on") or 0
         current_user.kobo_overdrive = int(to_save.get("kobo_overdrive") == "on") or 0
         current_user.kobo_audiobooks = int(to_save.get("kobo_audiobooks") == "on") or 0
@@ -1631,7 +1708,7 @@ def change_profile(kobo_support, hardcover_support, local_oauth_check, oauth_sta
         current_user.hardcover_token = to_save.get("hardcover_token", "").replace("Bearer ", "") or ""
         current_user.auto_send_enabled = to_save.get("auto_send_enabled") == "on"
         current_user.auto_metadata_fetch = to_save.get("auto_metadata_fetch") == "on"
-        
+
     except Exception as ex:
         flash(str(ex), category="error")
         return render_title_template("user_edit.html",
@@ -1790,12 +1867,17 @@ def show_book(book_id):
             if media_format.format.lower() in constants.EXTENSIONS_AUDIO:
                 entry.audio_entries.append(media_format.format.lower())
 
+        from .generated_shelves import generated_shelves_for_book
+
+        generated_shelves = generated_shelves_for_book(book_id)
+
         return render_title_template('detail.html',
                                      entry=entry,
                                      cc=cc,
                                      is_xhr=request.headers.get('X-Requested-With') == 'XMLHttpRequest',
                                      title=entry.title,
                                      books_shelfs=book_in_shelves,
+                                     generated_shelves=generated_shelves,
                                      page="book")
     else:
         log.debug("Selected book is unavailable. File does not exist or is not accessible")

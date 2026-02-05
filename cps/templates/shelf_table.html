@@ -1,0 +1,123 @@
+{% extends "layout.html" %}
+
+{% block header %}
+<link href="{{ url_for('static', filename='css/libs/bootstrap-table.min.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block body %}
+
+<div class="discover">
+  <h2>{{_('Shelves List')}}</h2>
+</div>
+
+<div id="shelf-table-i18n" style="display:none;"
+  data-selection-count="__COUNT__ {{_('selected')}}"
+  data-confirm-delete="{{_('Are you sure you want to delete the selected shelves?')}}"
+  data-kobo-enabled="{{_('Kobo sync enabled')}}"
+  data-kobo-disabled="{{_('Kobo sync disabled')}}"
+  data-error="{{_('Error')}}"
+  data-success="{{_('Success')}}"
+  data-public="{{_('Public')}}"
+  data-type-manual="{{_('Manual')}}"
+  data-type-generated="{{_('Generated')}}"
+></div>
+
+<div class="container-fluid">
+  {# Bulk action buttons #}
+  <div class="btn-toolbar" role="toolbar" aria-label="{{ _('Bulk Actions') }}" id="shelf-bulk-actions" style="margin-bottom: 10px;">
+    <span id="shelf-selection-status" style="margin-right: 15px; font-weight: bold; line-height: 34px;"></span>
+
+    {% if kobo_sync_enabled %}
+    <div class="btn btn-default disabled" id="enable_kobo_sync" aria-disabled="true">
+      <span class="glyphicon glyphicon-cloud-upload"></span> {{_('Enable Kobo Sync')}}
+    </div>
+    <div class="btn btn-default disabled" id="disable_kobo_sync" aria-disabled="true">
+      <span class="glyphicon glyphicon-cloud-download"></span> {{_('Disable Kobo Sync')}}
+    </div>
+    {% endif %}
+
+    <div class="btn btn-default disabled" id="delete_selected_shelves" aria-disabled="true">
+      <span class="glyphicon glyphicon-trash"></span> {{_('Delete Selected')}}
+    </div>
+  </div>
+
+  {# Status alert #}
+  <div id="shelf-action-status" class="alert alert-info" role="alert" style="display: none; margin-top: 10px;">
+    <button type="button" class="close" aria-label="{{ _('Close') }}" id="shelf-action-status-close">
+      <span aria-hidden="true">&times;</span>
+    </button>
+    <span class="shelf-status-text"></span>
+  </div>
+
+  {# Shelves table #}
+  <div>
+    <table id="shelves-table" class="table table-no-bordered table-striped"
+      data-url="{{ url_for('shelf.list_shelves') }}"
+      data-locale="{{ current_user.locale }}"
+      data-search="true"
+      data-show-columns="true"
+      data-pagination="true"
+      data-page-size="50"
+      data-page-list="[25, 50, 100, 200]"
+      data-side-pagination="server"
+      data-id-field="id"
+      data-unique-id="id"
+      data-sort-name="name"
+      data-sort-order="asc"
+      data-click-to-select="true"
+      data-maintain-selected="true"
+      data-show-refresh="true"
+      data-icons-prefix="glyphicon"
+    >
+      <thead>
+        <tr>
+          <th data-field="state" data-checkbox="true"></th>
+          <th data-field="id" data-visible="false" data-switchable="false">ID</th>
+          <th data-field="name" data-sortable="true" data-formatter="shelfNameFormatter">{{_('Name')}}</th>
+          <th data-field="is_generated" data-sortable="true" data-formatter="shelfTypeFormatter" data-align="center">{{_('Type')}}</th>
+          <th data-field="book_count" data-sortable="true" data-align="center">{{_('Books')}}</th>
+          <th data-field="is_public" data-sortable="true" data-formatter="publicFormatter" data-align="center" data-visible="false">{{_('Public')}}</th>
+          <th data-field="owner" data-sortable="false" data-visible="false">{{_('Owner')}}</th>
+          {% if kobo_sync_enabled %}
+          <th data-field="kobo_sync" data-sortable="true" data-formatter="koboSyncFormatter" data-align="center">{{_('Kobo Sync')}}</th>
+          {% endif %}
+          <th data-field="created" data-sortable="true" data-formatter="dateFormatter" data-visible="false">{{_('Created')}}</th>
+          <th data-field="last_modified" data-sortable="true" data-formatter="dateFormatter" data-visible="false">{{_('Modified')}}</th>
+          <th data-field="actions" data-formatter="shelfActionsFormatter" data-switchable="false" data-align="right">{{_('Actions')}}</th>
+        </tr>
+      </thead>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block modal %}
+{# Delete confirmation modal #}
+<div class="modal fade" id="delete_shelves_modal" role="dialog" aria-labelledby="deleteShelvesLabel">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-center">
+        <span>{{_('Are you really sure?')}}</span>
+      </div>
+      <div class="modal-body">
+        <p>{{_('The following shelves will be deleted:')}}</p>
+        <div class="text-left" id="display-delete-shelves"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="delete_shelves_confirm" type="button" class="btn btn-danger" data-dismiss="modal">{{_('Delete')}}</button>
+        <button type="button" class="btn btn-default" data-dismiss="modal">{{_('Cancel')}}</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block js %}
+<script src="{{ url_for('static', filename='js/libs/bootstrap-table/bootstrap-table.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/libs/bootstrap-table/bootstrap-table-locale-all.min.js') }}"></script>
+{% if not current_user.locale == 'en' %}
+<script src="{{ url_for('static', filename='js/libs/bootstrap-table/locale/bootstrap-table-' + current_user.locale + '.min.js') }}" charset="UTF-8"></script>
+{% endif %}
+<script src="{{ url_for('static', filename='js/shelf_table.js') }}"></script>
+{% endblock %}

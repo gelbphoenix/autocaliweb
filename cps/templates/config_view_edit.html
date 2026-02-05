@@ -74,6 +74,14 @@
               </select>
         </div>
         <div class="form-group">
+          <label for="config_generate_shelves_from_calibre_column">{{_('Generate and Link Shelves to Calibre Column')}}</label>
+              <select name="config_generate_shelves_from_calibre_column" id="config_generate_shelves_from_calibre_column" class="form-control">
+                {% for col in shelfColumns %}
+                <option value="{{ col.value }}" {% if col.value == (conf.config_generate_shelves_from_calibre_column or '') %}selected{% endif %}>{{ col.text }}</option>
+                {% endfor %}
+              </select>
+        </div>
+        <div class="form-group">
           <label for="config_title_regex">{{_('Regular Expression for Title Sorting')}}</label>
           <input type="text" class="form-control" name="config_title_regex" id="config_title_regex" value="{% if conf.config_title_regex != None %}{{ conf.config_title_regex }}{% endif %}" autocomplete="off">
         </div>

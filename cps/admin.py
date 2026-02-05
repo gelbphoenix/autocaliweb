@@ -27,6 +27,7 @@ import operator
 import time
 import sys
 import string
+import sqlite3
 from datetime import datetime, timedelta
 from datetime import time as datetime_time
 from functools import wraps
@@ -53,7 +54,7 @@ from .usermanagement import user_login_required
 from .cw_babel import get_available_translations, get_available_locale, get_user_locale_language
 from . import debug_info
 from .string_helper import strip_whitespaces
-from .web import web
+from .shelf import ensure_kobo_opt_in_shelf
 
 log = logger.create()
 
@@ -86,6 +87,64 @@ except ImportError as err:
     oauth_check = {}
 
 admi = Blueprint('admin', __name__)
+
+
+def _inspect_calibre_metadata_db(calibre_dir: str | None) -> dict:
+    """Inspect the Calibre metadata.db for common container mount pitfalls.
+
+    Primarily detects SQLite WAL mode without the corresponding sidecar files
+    (metadata.db-wal / metadata.db-shm), which can lead to apparently missing
+    books/authors when only metadata.db is mounted.
+    """
+    result: dict = {
+        "calibre_dir": calibre_dir,
+        "metadata_db": None,
+        "exists": False,
+        "sqlite_journal_mode": None,
+        "wal_exists": False,
+        "shm_exists": False,
+        "warning": None,
+        "error": None,
+    }
+
+    if not calibre_dir:
+        return result
+
+    # If the user entered a file path, point them at the directory.
+    if str(calibre_dir).lower().endswith("metadata.db"):
+        result["warning"] = _("Please set the Calibre database location to the directory containing metadata.db, not the metadata.db file itself.")
+        calibre_dir = os.path.dirname(calibre_dir)
+
+    metadata_db = os.path.join(calibre_dir, "metadata.db")
+    result["metadata_db"] = metadata_db
+    result["exists"] = os.path.exists(metadata_db)
+    if not result["exists"]:
+        return result
+
+    wal_path = metadata_db + "-wal"
+    shm_path = metadata_db + "-shm"
+    result["wal_exists"] = os.path.exists(wal_path)
+    result["shm_exists"] = os.path.exists(shm_path)
+
+    try:
+        conn = sqlite3.connect(f"file:{metadata_db}?mode=ro", uri=True)
+        cur = conn.cursor()
+        cur.execute("PRAGMA journal_mode")
+        row = cur.fetchone()
+        result["sqlite_journal_mode"] = (row[0] if row else None)
+        conn.close()
+    except Exception as ex:
+        result["error"] = str(ex)
+        return result
+
+    if (result["sqlite_journal_mode"] or "").lower() == "wal" and not (result["wal_exists"] and result["shm_exists"]):
+        result["warning"] = _(
+            "Your Calibre database appears to be using SQLite WAL mode, but metadata.db-wal and/or metadata.db-shm are missing. "
+            "If you bind-mount only metadata.db into the container, Autocaliweb may show stale or incomplete data. "
+            "Mount the whole Calibre library directory (recommended), or also mount metadata.db-wal and metadata.db-shm."
+        )
+
+    return result
 
 
 def admin_required(f):
@@ -313,13 +372,45 @@ def view_configuration():
         .filter(and_(db.CustomColumns.datatype == 'bool', db.CustomColumns.mark_for_delete == 0)).all()
     restrict_columns = calibre_db.session.query(db.CustomColumns) \
         .filter(and_(db.CustomColumns.datatype == 'text', db.CustomColumns.mark_for_delete == 0)).all()
+
+    shelf_columns = _get_multi_value_shelf_columns()
     languages = calibre_db.speaking_language()
     translations = get_available_locale()
     return render_title_template("config_view_edit.html", conf=config, readColumns=read_column,
                                  restrictColumns=restrict_columns,
+                                 shelfColumns=shelf_columns,
                                  languages=languages,
                                  translations=translations,
                                  title=_("UI Configuration"), page="uiconfig")
+
+
+def _get_multi_value_shelf_columns():
+    """Return dropdown options for shelf generation from multi-value Calibre fields."""
+    options = [
+        {"value": "", "text": _("Off")},
+        {"value": "tags", "text": _("Tags")},
+        {"value": "authors", "text": _("Authors")},
+        {"value": "languages", "text": _("Languages")},
+        {"value": "publishers", "text": _("Publishers")},
+    ]
+
+    try:
+        custom_multi = calibre_db.session.query(db.CustomColumns).filter(
+            and_(
+                db.CustomColumns.mark_for_delete == 0,
+                db.CustomColumns.is_multiple == 1,
+                db.CustomColumns.datatype.in_(['text', 'enumeration']),
+            )
+        ).order_by(db.CustomColumns.name).all()
+        for cc in custom_multi:
+            options.append({
+                "value": f"cc:{cc.id}",
+                "text": f"#{cc.label} — {cc.name}",
+            })
+    except Exception as ex:
+        log.error_or_exception(ex)
+
+    return options
 
 
 @admi.route("/admin/usertable")
@@ -495,7 +586,7 @@ def edit_list_user(param):
         vals['field_index'] = vals['field_index'][0]
     if 'value' in vals:
         vals['value'] = vals['value'][0]
-    elif not ('value[]' in vals):
+    elif 'value[]' not in vals:
         return _("Malformed request"), 400
     for user in users:
         try:
@@ -635,6 +726,12 @@ def update_view_configuration():
     _config_int(to_save, "config_authors_max")
     _config_string(to_save, "config_default_language")
     _config_string(to_save, "config_default_locale")
+    _config_string(to_save, "config_generate_shelves_from_calibre_column")
+
+    allowed_values = {opt["value"] for opt in _get_multi_value_shelf_columns()}
+    if config.config_generate_shelves_from_calibre_column not in allowed_values:
+        flash(_("Invalid shelf generation column"), category="error")
+        config.config_generate_shelves_from_calibre_column = ""
 
     config.config_default_role = constants.selected_roles(to_save)
     config.config_default_role &= ~constants.ROLE_ANONYMOUS
@@ -1015,7 +1112,7 @@ def restriction_addition(element, list_func):
     elementlist = list_func()
     if elementlist == ['']:
         elementlist = []
-    if not element['add_element'] in elementlist:
+    if element['add_element'] not in elementlist:
         elementlist += [element['add_element']]
     return ','.join(elementlist)
 
@@ -1593,6 +1690,133 @@ def download_debug():
     return debug_info.send_debug()
 
 
+@admi.route("/admin/calibre_audit", methods=["GET"])
+@user_login_required
+@admin_required
+def calibre_audit():
+    """Return diagnostic information about the connected Calibre DB.
+
+    This is meant to help troubleshoot cases where the UI shows fewer books/authors than expected.
+    Differences are usually caused by user filters (language/tags/restricted column) or archived books.
+    """
+
+    db_dir = getattr(config, "config_calibre_dir", None)
+    metadata_db_path = os.path.join(db_dir, "metadata.db") if db_dir else ""
+
+    payload = {
+        "config_calibre_dir": db_dir,
+        "metadata_db_path": metadata_db_path,
+        "metadata_db_exists": bool(metadata_db_path and os.path.exists(metadata_db_path)),
+        "metadata_db_stat": None,
+        "raw": {},
+        "acw_visible": {},
+        "filters": {
+            "language": None,
+            "allowed_tags": None,
+            "denied_tags": None,
+            "restricted_column": getattr(config, "config_restricted_column", None),
+            "allowed_column_value": getattr(current_user, "allowed_column_value", None),
+            "denied_column_value": getattr(current_user, "denied_column_value", None),
+            "archived_books_count": 0,
+        },
+    }
+
+    try:
+        payload["filters"]["language"] = current_user.filter_language()
+        payload["filters"]["allowed_tags"] = current_user.list_allowed_tags()
+        payload["filters"]["denied_tags"] = current_user.list_denied_tags()
+        payload["filters"]["archived_books_count"] = (
+            ub.session.query(ub.ArchivedBook)
+            .filter(ub.ArchivedBook.user_id == int(current_user.id))
+            .filter(ub.ArchivedBook.is_archived)
+            .count()
+        )
+    except Exception as ex:
+        payload["filters"]["error"] = f"Failed to read filter settings: {ex}"
+
+    if metadata_db_path and os.path.exists(metadata_db_path):
+        try:
+            st = os.stat(metadata_db_path)
+            payload["metadata_db_stat"] = {
+                "size_bytes": int(st.st_size),
+                "mtime": datetime.fromtimestamp(st.st_mtime).isoformat(),
+            }
+        except Exception as ex:
+            payload["metadata_db_stat"] = {"error": str(ex)}
+
+        # SQLite sidecar files (important for WAL mode).
+        wal_path = metadata_db_path + "-wal"
+        shm_path = metadata_db_path + "-shm"
+        payload["metadata_db_sidecars"] = {
+            "wal_path": wal_path,
+            "wal_exists": os.path.exists(wal_path),
+            "shm_path": shm_path,
+            "shm_exists": os.path.exists(shm_path),
+        }
+        for key, p in (("wal_stat", wal_path), ("shm_stat", shm_path)):
+            if os.path.exists(p):
+                try:
+                    st2 = os.stat(p)
+                    payload["metadata_db_sidecars"][key] = {
+                        "size_bytes": int(st2.st_size),
+                        "mtime": datetime.fromtimestamp(st2.st_mtime).isoformat(),
+                    }
+                except Exception as ex:
+                    payload["metadata_db_sidecars"][key] = {"error": str(ex)}
+
+        # Raw SQLite counts directly from calibre metadata.db (no ACW filtering).
+        try:
+            conn = sqlite3.connect(f"file:{metadata_db_path}?mode=ro", uri=True)
+            cur = conn.cursor()
+            try:
+                cur.execute("PRAGMA journal_mode")
+                row = cur.fetchone()
+                payload["raw"]["sqlite_journal_mode"] = row[0] if row else None
+            except Exception:
+                payload["raw"]["sqlite_journal_mode"] = None
+            cur.execute("SELECT COUNT(*) FROM books")
+            payload["raw"]["books_total"] = int(cur.fetchone()[0])
+            cur.execute("SELECT COUNT(*) FROM books WHERE title IS NULL OR TRIM(title) = ''")
+            payload["raw"]["books_missing_title"] = int(cur.fetchone()[0])
+            cur.execute("SELECT COUNT(*) FROM authors")
+            payload["raw"]["authors_total"] = int(cur.fetchone()[0])
+            cur.execute("SELECT COUNT(*) FROM authors WHERE name IS NULL OR TRIM(name) = ''")
+            payload["raw"]["authors_missing_name"] = int(cur.fetchone()[0])
+            cur.execute("SELECT COUNT(*) FROM books_authors_link")
+            payload["raw"]["books_authors_links"] = int(cur.fetchone()[0])
+            cur.execute(
+                "SELECT COUNT(*) FROM books b "
+                "LEFT JOIN books_authors_link bal ON bal.book = b.id "
+                "WHERE bal.author IS NULL"
+            )
+            payload["raw"]["books_without_authors"] = int(cur.fetchone()[0])
+            conn.close()
+        except Exception as ex:
+            payload["raw"]["error"] = f"Failed to query metadata.db: {ex}"
+
+    # Counts as ACW would display them for the current user (applies common_filters).
+    try:
+        visible_books = (
+            calibre_db.session.query(db.Books.id)
+            .filter(calibre_db.common_filters())
+            .count()
+        )
+        visible_authors = (
+            calibre_db.session.query(db.Authors.id)
+            .select_from(db.Authors)
+            .join(db.Authors.books)
+            .filter(calibre_db.common_filters())
+            .distinct()
+            .count()
+        )
+        payload["acw_visible"]["books_total"] = int(visible_books)
+        payload["acw_visible"]["authors_total"] = int(visible_authors)
+    except Exception as ex:
+        payload["acw_visible"]["error"] = f"Failed to query via ACW models: {ex}"
+
+    return Response(json.dumps(payload, indent=2), mimetype="application/json")
+
+
 @admi.route("/get_update_status", methods=['GET'])
 @user_login_required
 @admin_required
@@ -1913,7 +2137,7 @@ def _configuration_update_helper():
         if services.goodreads_support:
             services.goodreads_support.connect(config.config_goodreads_api_key,
                                                config.config_use_goodreads)
-            
+
         # Hardcover Author Info configuration
         _config_checkbox(to_save, "config_use_hardcover")
         to_save["config_hardcover_api_token"] = str(to_save.get("config_hardcover_api_token", "")).replace("Bearer ", "")
@@ -2005,8 +2229,11 @@ def _db_configuration_result(error_flash=None, gdrive_error=None):
     elif request.method == "POST" and not gdrive_error:
         flash(_("Database Settings updated"), category="success")
 
+    calibre_db_inspection = _inspect_calibre_metadata_db(getattr(config, "config_calibre_dir", None))
+
     return render_title_template("config_db.html",
                                  config=config,
+                                 calibre_db_inspection=calibre_db_inspection,
                                  show_authenticate_google_drive=gdrive_authenticate,
                                  gdriveError=gdrive_error,
                                  gdrivefolders=gdrivefolders,
@@ -2050,6 +2277,14 @@ def _handle_new_user(to_save, content, languages, translations, kobo_support):
         content.denied_column_value = config.config_denied_column_value
         # No default value for kobo sync shelf setting
         content.kobo_only_shelves_sync = to_save.get("kobo_only_shelves_sync", 0) == "on"
+        content.kobo_sync_collections_mode = to_save.get("kobo_sync_collections_mode", "selected")
+        content.kobo_generated_shelves_sync = to_save.get("kobo_generated_shelves_sync", 0) == "on"
+        content.kobo_generated_shelves_all_books = to_save.get("kobo_generated_shelves_all_books", 0) == "on"
+        content.kobo_sync_empty_collections = to_save.get("kobo_sync_empty_collections", 0) == "on"
+        try:
+            content.kobo_sync_item_limit = int(to_save.get("kobo_sync_item_limit", 100) or 100)
+        except (ValueError, TypeError):
+            content.kobo_sync_item_limit = 100
         content.kobo_plus = to_save.get("kobo_plus", 0) == "on"
         content.kobo_overdrive = to_save.get("kobo_overdrive", 0) == "on"
         content.kobo_audiobooks = to_save.get("kobo_audiobooks", 0) == "on"
@@ -2137,6 +2372,28 @@ def _handle_edit_user(to_save, content, languages, translations, kobo_support):
         # which don't have to be synced have to be removed (added to Shelf archive)
         if old_state == 0 and content.kobo_only_shelves_sync == 1:
             kobo_sync_status.update_on_sync_shelfs(content.id)
+
+        # Check if Kobo sync mode is changing - if so, force a full resync
+        old_kobo_mode = content.kobo_sync_collections_mode or "selected"
+        new_kobo_mode = to_save.get("kobo_sync_collections_mode", "selected")
+        if old_kobo_mode != new_kobo_mode:
+            # Delete sync records to force full resync on next device connection
+            ub.session.query(ub.KoboSyncedBooks).filter(
+                ub.KoboSyncedBooks.user_id == content.id
+            ).delete()
+            flash(_("Kobo sync mode changed. A full resync will occur on next device sync."), category="info")
+
+        content.kobo_sync_collections_mode = new_kobo_mode
+        # Create the opt-in shelf when switching to hybrid mode
+        if content.kobo_sync_collections_mode == "hybrid":
+            ensure_kobo_opt_in_shelf(content.id)
+        content.kobo_generated_shelves_sync = int(to_save.get("kobo_generated_shelves_sync") == "on") or 0
+        content.kobo_generated_shelves_all_books = int(to_save.get("kobo_generated_shelves_all_books") == "on") or 0
+        content.kobo_sync_empty_collections = int(to_save.get("kobo_sync_empty_collections") == "on") or 0
+        try:
+            content.kobo_sync_item_limit = int(to_save.get("kobo_sync_item_limit", 100) or 100)
+        except (ValueError, TypeError):
+            content.kobo_sync_item_limit = 100
         content.kobo_plus = int(to_save.get("kobo_plus") == "on") or 0
         content.kobo_overdrive = int(to_save.get("kobo_overdrive") == "on") or 0
         content.kobo_audiobooks = int(to_save.get("kobo_audiobooks") == "on") or 0
@@ -2198,7 +2455,7 @@ def _handle_edit_user(to_save, content, languages, translations, kobo_support):
 
 
 def extract_user_data_from_field(user, field):
-    match = re.search(field + r"=(.*?)($|(?<!\\),)", user, re.IGNORECASE | re.UNICODE)    
+    match = re.search(field + r"=(.*?)($|(?<!\\),)", user, re.IGNORECASE | re.UNICODE)
     if match:
         return match.group(1)
     else:

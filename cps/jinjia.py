@@ -37,6 +37,13 @@ jinjia = Blueprint('jinjia', __name__)
 log = logger.create()
 
 
+@jinjia.app_template_global()
+def generated_shelf_badge_text(source: str) -> str:
+    # Import lazily to avoid potential circular imports during app startup.
+    from .generated_shelves import generated_shelf_badge_text as _badge_text
+    return _badge_text(source)
+
+
 # pagination links in jinja
 @jinjia.app_template_filter('url_for_other_page')
 def url_for_other_page(page):

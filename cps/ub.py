@@ -31,12 +31,12 @@ from .cw_login import AnonymousUserMixin, current_user, user_logged_in
 try:
     from flask_dance.consumer.backend.sqla import OAuthConsumerMixin
     oauth_support = True
-except ImportError as e:
+except ImportError:
     # fails on flask-dance >1.3, due to renaming
     try:
         from flask_dance.consumer.storage.sqla import OAuthConsumerMixin
         oauth_support = True
-    except ImportError as e:
+    except ImportError:
         OAuthConsumerMixin = BaseException
         oauth_support = False
 from sqlalchemy import create_engine, exc, exists, event, text, Column, ForeignKey, Index, String, Integer, SmallInteger, Boolean, DateTime, Float, JSON
@@ -253,11 +253,23 @@ class User(UserBase, Base):
     allowed_column_value = Column(String, default="")
     remote_auth_token = relationship('RemoteAuthToken', backref='user', lazy='dynamic')
     view_settings = Column(JSON, default={})
+    # Legacy field - replaced by kobo_sync_collections_mode, kept for migration
     kobo_only_shelves_sync = Column(Integer, default=0)
     kobo_plus = Column(Integer, default=0)
     kobo_overdrive = Column(Integer, default=0)
     kobo_audiobooks = Column(Integer, default=0)
     kobo_instapaper = Column(Integer, default=0)
+    # Per-user Kobo sync settings (moved from global config)
+    # Kobo Collections sync mode: "all", "selected", or "hybrid"
+    kobo_sync_collections_mode = Column(String, default="selected")
+    # Enable generated shelf sync (Author, Series, etc.)
+    kobo_generated_shelves_sync = Column(Boolean, default=False)
+    # When true, generated shelves include ALL books in library
+    kobo_generated_shelves_all_books = Column(Boolean, default=False)
+    # When true, sync empty collections (shelves with 0 books) to Kobo
+    kobo_sync_empty_collections = Column(Boolean, default=False)
+    # Max items per sync response (10-500)
+    kobo_sync_item_limit = Column(Integer, default=100)
     hardcover_token = Column(String, default="")
     auto_send_enabled = Column(Boolean, default=False)
 
@@ -355,7 +367,7 @@ class Anonymous(AnonymousUserMixin, UserBase):
         return None
 
     def set_view_property(self, page, prop, value):
-        if not 'view' in flask_session:
+        if 'view' not in flask_session:
             flask_session['view'] = dict()
         if not flask_session['view'].get(page):
             flask_session['view'][page] = dict()
@@ -470,6 +482,24 @@ class KoboSyncedBooks(Base):
     user_id = Column(Integer, ForeignKey('user.id'))
     book_id = Column(Integer)
 
+
+class KoboTagSyncState(Base):
+    __tablename__ = 'kobo_tag_sync_state'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('user.id'), unique=True)
+
+    generated_selector = Column(String, default='')
+    include_generated_in_selected = Column(Boolean, default=False)
+    collections_mode = Column(String, default='')
+    sync_all_generated = Column(Boolean, default=False)
+
+    # Set true when the server needs to re-emit all generated collections at least once
+    # (e.g., user enabled generated shelves in selected mode).
+    force_resync_generated = Column(Boolean, default=False)
+
+    last_modified = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
 # The Kobo ReadingState API keeps track of 4 timestamped entities:
 #   ReadingState, StatusInfo, Statistics, CurrentBookmark
 # Which we map to the following 4 tables:
@@ -523,13 +553,37 @@ class KoboAnnotationSync(Base):
     highlighted_text = Column(String, nullable=True)
     highlight_color = Column(String, nullable=True)
     note_text = Column(String, nullable=True)
-    
+
     __table_args__ = (
         Index('ix_kobo_annotation_sync_user_annotation', 'user_id', 'annotation_id'),
     )
 
     def __repr__(self):
         return f'<KoboAnnotationSync annotation_id={self.annotation_id} book_id={self.book_id}>'
+
+
+class GeneratedShelfKoboSync(Base):
+    """Track Kobo sync preferences for generated shelves (author, series, tags, etc.).
+
+    Generated shelves are computed dynamically from Calibre metadata and don't exist in the
+    ub.Shelf table. This table stores the user's kobo_sync preference for each generated shelf.
+    """
+    __tablename__ = 'generated_shelf_kobo_sync'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
+    source = Column(String, nullable=False)  # e.g., "authors", "series", "tags", "publishers", "languages"
+    value = Column(String, nullable=False)   # e.g., "Brandon Sanderson", "The Expanse"
+    kobo_sync = Column(Boolean, default=False)
+    created = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    last_modified = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        Index('ix_generated_shelf_kobo_sync_user_source_value', 'user_id', 'source', 'value', unique=True),
+    )
+
+    def __repr__(self):
+        return f'<GeneratedShelfKoboSync user={self.user_id} source={self.source} value={self.value} sync={self.kobo_sync}>'
 
 
 class HardcoverBookBlacklist(Base):
@@ -650,8 +704,56 @@ def add_missing_tables(engine, _session):
         ArchivedBook.__table__.create(bind=engine)
     if not engine.dialect.has_table(engine.connect(), "thumbnail"):
         Thumbnail.__table__.create(bind=engine)
+    # Indexes: keep thumbnail lookups fast even on large libraries.
+    # (No Alembic here; create indexes opportunistically.)
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_thumbnail_lookup "
+                "ON thumbnail (type, entity_id, resolution, format, expiration, generated_at, id)"
+            ))
+    except Exception:
+        # Non-fatal: index creation can fail on read-only DBs.
+        pass
     if not engine.dialect.has_table(engine.connect(), "kosync_progress"):
         KOSyncProgress.__table__.create(bind=engine)
+
+    if not engine.dialect.has_table(engine.connect(), "kobo_tag_sync_state"):
+        KoboTagSyncState.__table__.create(bind=engine)
+
+    # Add missing columns to kobo_tag_sync_state table
+    try:
+        with engine.connect() as conn:
+            # Check if sync_all_generated column exists
+            result = conn.execute(text("PRAGMA table_info(kobo_tag_sync_state)"))
+            columns = [row[1] for row in result.fetchall()]
+            if "sync_all_generated" not in columns:
+                conn.execute(text("ALTER TABLE kobo_tag_sync_state ADD COLUMN sync_all_generated BOOLEAN DEFAULT 0"))
+                conn.commit()
+    except Exception:
+        # Non-fatal: DB might be read-only
+        pass
+
+    # Backfill missing shelf UUIDs (required for Kobo Collections IDs).
+    try:
+        shelves_missing_uuid = (
+            _session.query(Shelf)
+            .filter(or_(Shelf.uuid.is_(None), Shelf.uuid == ""))
+            .all()
+        )
+        for shelf in shelves_missing_uuid or []:
+            try:
+                shelf.uuid = str(uuid.uuid4())
+            except Exception:
+                continue
+        if shelves_missing_uuid:
+            _session.commit()
+    except Exception:
+        # Non-fatal: DB might be read-only.
+        try:
+            _session.rollback()
+        except Exception:
+            pass
 
 
 # migrate all settings missing in registration table
@@ -704,11 +806,16 @@ def migrate_user_table(engine, _session):
             ('kobo_overdrive', "INTEGER NOT NULL DEFAULT 0"),
             ('kobo_audiobooks', "INTEGER NOT NULL DEFAULT 0"),
             ('kobo_instapaper', "INTEGER NOT NULL DEFAULT 0"),
+            ('kobo_sync_collections_mode', "VARCHAR(32) NOT NULL DEFAULT 'selected'"),
+            ('kobo_generated_shelves_sync', "BOOLEAN NOT NULL DEFAULT 0"),
+            ('kobo_generated_shelves_all_books', "BOOLEAN NOT NULL DEFAULT 0"),
+            ('kobo_sync_empty_collections', "BOOLEAN NOT NULL DEFAULT 0"),
+            ('kobo_sync_item_limit', "INTEGER NOT NULL DEFAULT 100"),
             ('hardcover_token', "VARCHAR(255) NOT NULL DEFAULT ''"),
             ('auto_send_enabled', "BOOLEAN NOT NULL DEFAULT 0"),
         ]
         for col_name, col_def in needed:
-            exists = conn.execute(text(f"PRAGMA table_info(user)")).fetchall()
+            exists = conn.execute(text("PRAGMA table_info(user)")).fetchall()
             if not any(row[1] == col_name for row in exists):
                 conn.execute(text(f"ALTER TABLE user ADD COLUMN {col_name} {col_def}"))
 
@@ -731,7 +838,7 @@ def migrate_oauth_table(engine, _session):
             ('active', "BOOLEAN NOT NULL DEFAULT 0"),
         ]
         for col_name, col_def in needed:
-            exists = conn.execute(text(f"PRAGMA table_info(oauthProvider)")).fetchall()
+            exists = conn.execute(text("PRAGMA table_info(oauthProvider)")).fetchall()
             if not any(row[1] == col_name for row in exists):
                 conn.execute(text(f"ALTER TABLE oauthProvider ADD COLUMN {col_name} {col_def}"))
 
